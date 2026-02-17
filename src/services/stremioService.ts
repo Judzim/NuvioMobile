@@ -1987,6 +1987,65 @@ class StremioService {
     return false;
   }
 
+  // Reconcile local addon order to match a remote ordered list of addon manifest URLs.
+  // Any local addons not present in the remote list are appended in their current order.
+  async applyAddonOrderFromManifestUrls(manifestUrls: string[]): Promise<boolean> {
+    await this.ensureInitialized();
+    if (!Array.isArray(manifestUrls) || manifestUrls.length === 0) return false;
+
+    const normalizeManifestUrl = (raw: string): string => {
+      const value = (raw || '').trim();
+      if (!value) return '';
+      const withManifest = value.includes('manifest.json')
+        ? value
+        : `${value.replace(/\/$/, '')}/manifest.json`;
+      return withManifest.toLowerCase();
+    };
+
+    const localByNormalizedUrl = new Map<string, string[]>();
+    for (const installationId of this.addonOrder) {
+      const addon = this.installedAddons.get(installationId);
+      if (!addon) continue;
+      const normalized = normalizeManifestUrl(addon.originalUrl || addon.url || '');
+      if (!normalized) continue;
+      const list = localByNormalizedUrl.get(normalized) || [];
+      list.push(installationId);
+      localByNormalizedUrl.set(normalized, list);
+    }
+
+    const nextOrder: string[] = [];
+    const seenInstallations = new Set<string>();
+
+    for (const remoteUrl of manifestUrls) {
+      const normalizedRemote = normalizeManifestUrl(remoteUrl);
+      if (!normalizedRemote) continue;
+      const candidates = localByNormalizedUrl.get(normalizedRemote);
+      if (!candidates || candidates.length === 0) continue;
+      const installationId = candidates.shift();
+      if (!installationId || seenInstallations.has(installationId)) continue;
+      nextOrder.push(installationId);
+      seenInstallations.add(installationId);
+    }
+
+    for (const installationId of this.addonOrder) {
+      if (!this.installedAddons.has(installationId)) continue;
+      if (seenInstallations.has(installationId)) continue;
+      nextOrder.push(installationId);
+      seenInstallations.add(installationId);
+    }
+
+    const changed =
+      nextOrder.length !== this.addonOrder.length ||
+      nextOrder.some((id, index) => id !== this.addonOrder[index]);
+
+    if (!changed) return false;
+
+    this.addonOrder = nextOrder;
+    await this.saveAddonOrder();
+    addonEmitter.emit(ADDON_EVENTS.ORDER_CHANGED);
+    return true;
+  }
+
   // Check if any installed addons can provide streams (including embedded streams in metadata)
   async hasStreamProviders(type?: string): Promise<boolean> {
     await this.ensureInitialized();
