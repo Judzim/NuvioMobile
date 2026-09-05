@@ -80,7 +80,7 @@ class SimklRewatchPolicyTest {
                 movie = movieMedia,
             ),
         )
-        val result = scrobbleResult(movieMedia, episode = null)
+        val result = scrobbleResult(movieMedia, episode = null, mediaType = SimklMediaType.MOVIES)
 
         assertTrue(completed.hasPriorWatch(result))
         assertFalse(planned.hasPriorWatch(result))

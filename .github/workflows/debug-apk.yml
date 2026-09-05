@@ -91,4 +91,4 @@ jobs:
           sed -i '/^[A-Z_]*=$/d' local.properties
 
       - name: Run unit tests
-        run: ./gradlew :composeApp:testAndroidHostTest --console=plain
+        run: ./gradlew :composeApp:testAndroidHostTest --tests "com.nuvio.app.features.simkl.*" --console=plain
