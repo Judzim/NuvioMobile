@@ -56,3 +56,26 @@ jobs:
           name: nuvio-playstore-debug
           path: androidApp/build/outputs/apk/playstore/debug/*.apk
           if-no-files-found: error
+
+  test:
+    name: Run common unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GRADLE_OPTS: -Dfile.encoding=UTF-8
+      KOTLIN_DAEMON_JVMARGS: -Xmx3072M
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run unit tests
+        run: ./gradlew :composeApp:testPlaystoreDebugUnitTest -Pnuvio.android.distribution=playstore
