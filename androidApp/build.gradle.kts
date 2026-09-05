@@ -108,7 +108,7 @@ android {
             isEnable = buildsReleaseApks
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = false
+            isUniversalApk = true
         }
     }
 
@@ -137,6 +137,9 @@ android {
 androidComponents {
     onVariants(selector().withBuildType("debug")) { variant ->
         variant.applicationId.set("com.nuviodebug.com")
+    }
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.applicationId.set("com.judzim.nuvio")
     }
 }
 
