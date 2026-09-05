@@ -78,9 +78,4 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Run unit tests
-        run: |
-          ./gradlew :composeApp:testDebugUnitTest --console=plain || {
-            echo "---- available test tasks ----";
-            ./gradlew :composeApp:tasks --all --console=plain 2>/dev/null | grep -iE "test" | head -40;
-            exit 1;
-          }
+        run: ./gradlew :composeApp:testAndroidHostTest --console=plain
