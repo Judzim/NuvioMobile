@@ -1,0 +1,58 @@
+name: Debug APK
+
+on:
+  push:
+    branches:
+      - feature/simkl-rewatches
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: debug-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Assemble playstore debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GRADLE_OPTS: -Dfile.encoding=UTF-8
+      KOTLIN_DAEMON_JVMARGS: -Xmx3072M
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Write local runtime properties
+        run: |
+          cat > local.properties <<'EOF'
+          SIMKL_CLIENT_ID=${{ secrets.SIMKL_CLIENT_ID }}
+          SIMKL_APP_NAME=${{ secrets.SIMKL_APP_NAME }}
+          SIMKL_REDIRECT_URI=${{ secrets.SIMKL_REDIRECT_URI }}
+          NUVIO_SUPABASE_URL=${{ secrets.NUVIO_SUPABASE_URL }}
+          NUVIO_SUPABASE_ANON_KEY=${{ secrets.NUVIO_SUPABASE_ANON_KEY }}
+          NUVIO_SUPABASE_FALLBACK_URL=${{ secrets.NUVIO_SUPABASE_FALLBACK_URL }}
+          EOF
+          # Remove lines whose secret was left empty so generated config falls back to defaults.
+          sed -i '/^[A-Z_]*=$/d' local.properties
+
+      - name: Assemble debug APK
+        run: ./gradlew :androidApp:assemblePlaystoreDebug -Pnuvio.android.distribution=playstore
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuvio-playstore-debug
+          path: androidApp/build/outputs/apk/playstore/debug/*.apk
+          if-no-files-found: error
