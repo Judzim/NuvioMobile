@@ -77,5 +77,18 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Write local runtime properties
+        run: |
+          cat > local.properties <<'EOF'
+          SIMKL_CLIENT_ID=${{ secrets.SIMKL_CLIENT_ID }}
+          SIMKL_APP_NAME=${{ secrets.SIMKL_APP_NAME }}
+          SIMKL_REDIRECT_URI=${{ secrets.SIMKL_REDIRECT_URI }}
+          NUVIO_SUPABASE_URL=${{ secrets.NUVIO_SUPABASE_URL }}
+          NUVIO_SUPABASE_ANON_KEY=${{ secrets.NUVIO_SUPABASE_ANON_KEY }}
+          NUVIO_SUPABASE_FALLBACK_URL=${{ secrets.NUVIO_SUPABASE_FALLBACK_URL }}
+          EOF
+          # Remove lines whose secret was left empty so generated config falls back to defaults.
+          sed -i '/^[A-Z_]*=$/d' local.properties
+
       - name: Run unit tests
         run: ./gradlew :composeApp:testAndroidHostTest --console=plain
