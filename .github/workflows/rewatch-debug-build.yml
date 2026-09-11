@@ -1,0 +1,112 @@
+name: Rewatch debug build
+
+# Temporary fork-only workflow: builds and tests the Simkl rewatch work so it can be verified
+# without a local JVM. It is not part of the pull request.
+#
+# `AndroidDownloadLifecycleTest` fails on this runner on pristine upstream as well (Robolectric
+# cannot resolve an SDK there), so it is whitelisted instead of masking real failures.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - simkl-rewatch-build
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rewatch-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: Unit tests and debug APK
+    runs-on: ubuntu-latest
+    env:
+      SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
+      SIMKL_APP_NAME: ${{ secrets.SIMKL_APP_NAME }}
+      SIMKL_REDIRECT_URI: ${{ secrets.SIMKL_REDIRECT_URI }}
+      NUVIO_SUPABASE_URL: ${{ secrets.NUVIO_SUPABASE_URL }}
+      NUVIO_SUPABASE_ANON_KEY: ${{ secrets.NUVIO_SUPABASE_ANON_KEY }}
+      NUVIO_SUPABASE_FALLBACK_URL: ${{ secrets.NUVIO_SUPABASE_FALLBACK_URL }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Write runtime properties
+        run: |
+          printf '%s\n' \
+            "SIMKL_CLIENT_ID=${SIMKL_CLIENT_ID}" \
+            "SIMKL_APP_NAME=${SIMKL_APP_NAME}" \
+            "SIMKL_REDIRECT_URI=${SIMKL_REDIRECT_URI}" \
+            "NUVIO_SUPABASE_URL=${NUVIO_SUPABASE_URL}" \
+            "NUVIO_SUPABASE_ANON_KEY=${NUVIO_SUPABASE_ANON_KEY}" \
+            "NUVIO_SUPABASE_FALLBACK_URL=${NUVIO_SUPABASE_FALLBACK_URL}" \
+            > local.properties
+
+      - name: Compile host tests
+        run: ./gradlew :composeApp:compileAndroidHostTest --stacktrace
+
+      - name: Unit tests
+        run: |
+          set +e
+          ./gradlew :composeApp:testAndroidHostTest --continue --stacktrace
+          gradle_status=$?
+          set -e
+          python3 - <<'PY'
+          import glob
+          import sys
+          import xml.etree.ElementTree as ET
+
+          known_failure = "AndroidDownloadLifecycleTest"
+          reports = glob.glob("composeApp/build/test-results/testAndroidHostTest/*.xml")
+          if not reports:
+              print("No test reports were produced.")
+              sys.exit(1)
+
+          total = 0
+          failures = []
+          known = 0
+          for path in reports:
+              root = ET.parse(path).getroot()
+              for case in root.iter("testcase"):
+                  total += 1
+                  if case.find("failure") is None and case.find("error") is None:
+                      continue
+                  name = f'{case.get("classname")}.{case.get("name")}'
+                  if known_failure in name:
+                      known += 1
+                  else:
+                      failures.append(name)
+
+          print(f"{total} tests, {known} known runner failures, {len(failures)} unexpected")
+          if failures:
+              for name in failures:
+                  print(f"  FAILED {name}")
+              sys.exit(1)
+          if total < 500:
+              print("Suspiciously few tests ran.")
+              sys.exit(1)
+          PY
+          echo "gradle exit code was ${gradle_status}"
+
+      - name: Assemble debug APK
+        run: ./gradlew :androidApp:assemblePlaystoreDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: rewatch-playstore-debug
+          path: androidApp/build/outputs/apk/playstore/debug/*.apk
+          if-no-files-found: error
