@@ -27,8 +27,11 @@ import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.library.LibrarySourceMode
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.simkl.SimklAnimeIdPreference
+import com.nuvio.app.features.simkl.SimklAuthRepository
 import com.nuvio.app.features.simkl.SimklAuthUiState
 import com.nuvio.app.features.simkl.SimklConnectionMode
+import com.nuvio.app.features.simkl.SimklRewatchMode
+import com.nuvio.app.features.simkl.isSimklRewatchModeSelectable
 import com.nuvio.app.features.tracking.TrackingProviderId
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tracking.TrackingSettingsUiState
@@ -50,6 +53,16 @@ import nuvio.composeapp.generated.resources.settings_tracking_data_sources
 import nuvio.composeapp.generated.resources.settings_tracking_nuvio_library_description
 import nuvio.composeapp.generated.resources.settings_tracking_nuvio_progress_description
 import nuvio.composeapp.generated.resources.settings_tracking_progress_refresh_failed
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_automatic
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_automatic_description
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_dialog_subtitle
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_dialog_title
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_manual
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_manual_description
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_off
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_off_description
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_subtitle
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_title
 import nuvio.composeapp.generated.resources.settings_tracking_services
 import nuvio.composeapp.generated.resources.settings_tracking_simkl_library_description
 import nuvio.composeapp.generated.resources.settings_tracking_simkl_progress_description
@@ -160,9 +173,10 @@ internal fun LazyListScope.trackingSettingsContent(
                 title = stringResource(Res.string.settings_tracking_anime_section),
                 isTablet = isTablet,
             ) {
-                AnimeIdPreferenceSection(
+                SimklFeaturesSection(
                     isTablet = isTablet,
                     settingsUiState = settingsUiState,
+                    accountType = simklUiState.accountType,
                 )
             }
         }
@@ -588,11 +602,15 @@ internal fun effectiveTrackingRecommendationsSource(
     }
 
 @Composable
-private fun AnimeIdPreferenceSection(
+private fun SimklFeaturesSection(
     isTablet: Boolean,
     settingsUiState: TrackingSettingsUiState,
+    accountType: String?,
 ) {
-    var showPicker by rememberSaveable { mutableStateOf(false) }
+    var showAnimeIdPicker by rememberSaveable { mutableStateOf(false) }
+    var showRewatchPicker by rememberSaveable { mutableStateOf(false) }
+    var showRewatchUpgradeDialog by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     SettingsGroup(isTablet = isTablet) {
         TrackingPreferenceActionRow(
@@ -600,11 +618,19 @@ private fun AnimeIdPreferenceSection(
             description = stringResource(Res.string.settings_tracking_anime_id_subtitle),
             value = animeIdPreferenceLabel(settingsUiState.simklAnimeIdPreference),
             isTablet = isTablet,
-            onClick = { showPicker = true },
+            onClick = { showAnimeIdPicker = true },
+        )
+        SettingsGroupDivider(isTablet = isTablet)
+        TrackingPreferenceActionRow(
+            title = stringResource(Res.string.settings_tracking_rewatch_title),
+            description = stringResource(Res.string.settings_tracking_rewatch_subtitle),
+            value = simklRewatchModeLabel(settingsUiState.simklRewatchMode),
+            isTablet = isTablet,
+            onClick = { showRewatchPicker = true },
         )
     }
 
-    if (showPicker) {
+    if (showAnimeIdPicker) {
         TrackingAdaptivePicker(
             isTablet = isTablet,
             title = stringResource(Res.string.settings_tracking_anime_id_dialog_title),
@@ -612,9 +638,66 @@ private fun AnimeIdPreferenceSection(
             selectedValue = settingsUiState.simklAnimeIdPreference,
             options = animeIdPreferenceOptions(),
             onSelected = TrackingSettingsRepository::setSimklAnimeIdPreference,
-            onDismiss = { showPicker = false },
+            onDismiss = { showAnimeIdPicker = false },
         )
     }
+
+    if (showRewatchPicker) {
+        TrackingAdaptivePicker(
+            isTablet = isTablet,
+            title = stringResource(Res.string.settings_tracking_rewatch_dialog_title),
+            subtitle = stringResource(Res.string.settings_tracking_rewatch_dialog_subtitle),
+            selectedValue = settingsUiState.simklRewatchMode,
+            options = simklRewatchModeOptions(),
+            onSelected = { mode ->
+                if (mode == SimklRewatchMode.OFF) {
+                    TrackingSettingsRepository.setSimklRewatchMode(mode)
+                } else {
+                    // Simkl only stores rewatch sessions for Pro and VIP, so the plan is validated
+                    // at the moment the user enables the feature instead of on the first write.
+                    scope.launch {
+                        val plan = SimklAuthRepository.ensurePlanLoaded()
+                        if (isSimklRewatchModeSelectable(mode, plan)) {
+                            TrackingSettingsRepository.setSimklRewatchMode(mode)
+                        } else {
+                            showRewatchUpgradeDialog = true
+                        }
+                    }
+                }
+            },
+            onDismiss = { showRewatchPicker = false },
+        )
+    }
+
+    if (showRewatchUpgradeDialog) {
+        SimklRewatchUpgradeDialog(onDismiss = { showRewatchUpgradeDialog = false })
+    }
+}
+
+@Composable
+private fun simklRewatchModeOptions(): List<TrackingPickerOption<SimklRewatchMode>> = listOf(
+    TrackingPickerOption(
+        value = SimklRewatchMode.OFF,
+        title = stringResource(Res.string.settings_tracking_rewatch_off),
+        description = stringResource(Res.string.settings_tracking_rewatch_off_description),
+    ),
+    TrackingPickerOption(
+        value = SimklRewatchMode.MANUAL,
+        title = stringResource(Res.string.settings_tracking_rewatch_manual),
+        description = stringResource(Res.string.settings_tracking_rewatch_manual_description),
+    ),
+    TrackingPickerOption(
+        value = SimklRewatchMode.AUTOMATIC,
+        title = stringResource(Res.string.settings_tracking_rewatch_automatic),
+        description = stringResource(Res.string.settings_tracking_rewatch_automatic_description),
+    ),
+)
+
+@Composable
+private fun simklRewatchModeLabel(mode: SimklRewatchMode): String = when (mode) {
+    SimklRewatchMode.OFF -> stringResource(Res.string.settings_tracking_rewatch_off)
+    SimklRewatchMode.MANUAL -> stringResource(Res.string.settings_tracking_rewatch_manual)
+    SimklRewatchMode.AUTOMATIC -> stringResource(Res.string.settings_tracking_rewatch_automatic)
 }
 
 @Composable
