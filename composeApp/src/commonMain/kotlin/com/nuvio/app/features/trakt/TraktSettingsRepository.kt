@@ -6,6 +6,8 @@ import com.nuvio.app.features.library.LibrarySourceMode
 import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.simkl.DEFAULT_SIMKL_ANIME_ID_PREFERENCE
 import com.nuvio.app.features.simkl.SimklAnimeIdPreference
+import com.nuvio.app.features.simkl.SimklRewatchMode
+import com.nuvio.app.features.tracking.RewatchIntentRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,6 +60,7 @@ data class TraktSettingsUiState(
     val librarySourceMode: LibrarySourceMode = DEFAULT_LIBRARY_SOURCE_MODE,
     val moreLikeThisSource: MoreLikeThisSourcePreference = DEFAULT_MORE_LIKE_THIS_SOURCE,
     val simklAnimeIdPreference: SimklAnimeIdPreference = DEFAULT_SIMKL_ANIME_ID_PREFERENCE,
+    val simklRewatchMode: SimklRewatchMode = SimklRewatchMode.Default,
 )
 
 @Serializable
@@ -67,6 +70,7 @@ private data class StoredTraktSettings(
     val librarySourceMode: String? = null,
     val moreLikeThisSource: String? = null,
     val simklAnimeIdPreference: String? = null,
+    val simklRewatchMode: String? = null,
 )
 
 object TraktSettingsRepository {
@@ -143,6 +147,16 @@ object TraktSettingsRepository {
         com.nuvio.app.features.simkl.SimklSyncRepository.invalidateProjections()
     }
 
+    fun setSimklRewatchMode(mode: SimklRewatchMode) {
+        ensureLoaded()
+        if (_uiState.value.simklRewatchMode == mode) return
+        _uiState.value = _uiState.value.copy(simklRewatchMode = mode)
+        persist()
+        if (!mode.isEnabled) {
+            RewatchIntentRepository.clear()
+        }
+    }
+
     private fun loadFromDisk() {
         hasLoaded = true
 
@@ -163,6 +177,7 @@ object TraktSettingsRepository {
                 librarySourceMode = librarySourceModeFromStorage(stored.librarySourceMode),
                 moreLikeThisSource = MoreLikeThisSourcePreference.fromStorage(stored.moreLikeThisSource),
                 simklAnimeIdPreference = SimklAnimeIdPreference.fromStorage(stored.simklAnimeIdPreference),
+                simklRewatchMode = SimklRewatchMode.fromStorage(stored.simklRewatchMode),
             )
         } else {
             TraktSettingsUiState()
@@ -178,6 +193,7 @@ object TraktSettingsRepository {
                     librarySourceMode = state.librarySourceMode.name,
                     moreLikeThisSource = state.moreLikeThisSource.name,
                     simklAnimeIdPreference = state.simklAnimeIdPreference.name,
+                    simklRewatchMode = state.simklRewatchMode.name,
                 ),
             ),
         )
