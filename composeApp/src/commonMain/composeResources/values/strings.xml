@@ -642,7 +642,9 @@
     <string name="hero_mark_unwatched">Mark as unwatched</string>
     <string name="hero_mark_watched">Mark as watched</string>
     <string name="hero_remove_from_library">Remove from library</string>
-    <string name="hero_watch_again">Watch again</string>
+    <string name="rewatch_prompt_title">Record this viewing as a rewatch in Simkl?</string>
+    <string name="rewatch_prompt_confirm">Record</string>
+    <string name="rewatch_prompt_dismiss">No</string>
     <string name="home_view_all">View All</string>
     <string name="play_manually">Play manually</string>
     <string name="poster_logo_content_description">%1$s logo</string>
@@ -1288,7 +1290,7 @@
     <string name="settings_tracking_rewatch_off">Off</string>
     <string name="settings_tracking_rewatch_off_description">Nuvio never records rewatch sessions.</string>
     <string name="settings_tracking_rewatch_manual">Manual</string>
-    <string name="settings_tracking_rewatch_manual_description">Only titles you mark with "Watch again" are recorded as rewatches.</string>
+    <string name="settings_tracking_rewatch_manual_description">Ask after every finished playback of something you already watched, and record it only when you confirm.</string>
     <string name="settings_tracking_rewatch_automatic">Automatic</string>
     <string name="settings_tracking_rewatch_automatic_description">Every finished playback of an already watched episode or movie is recorded as a rewatch.</string>
     <string name="settings_tracking_rewatch_pro_title">Rewatch tracking requires Simkl Pro</string>
