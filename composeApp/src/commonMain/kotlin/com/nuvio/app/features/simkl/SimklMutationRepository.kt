@@ -1,6 +1,8 @@
 package com.nuvio.app.features.simkl
 
+import co.touchlab.kermit.Logger
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.tracking.RewatchIntentRepository
 import com.nuvio.app.features.tracking.TrackingEpisode
 import com.nuvio.app.features.tracking.TrackingExternalIds
 import com.nuvio.app.features.tracking.TrackingHistoryItem
@@ -16,6 +18,7 @@ import com.nuvio.app.features.tracking.TrackingRefreshIntent
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.tracking.TrackingScrobbleEvent
 import com.nuvio.app.features.tracking.TrackingScrobbler
+import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -97,6 +100,7 @@ internal class SimklMutationService(
     suspend fun scrobble(
         action: TrackingScrobbleAction,
         event: TrackingScrobbleEvent,
+        recordRewatch: Boolean = false,
     ): SimklScrobbleResult {
         require(event.media.hasResolvableIdentity) { "Simkl scrobble requires a media ID or title" }
         require(event.media.kind == TrackingMediaKind.MOVIE || event.media.episode != null) {
@@ -106,6 +110,7 @@ internal class SimklMutationService(
             SimklApiRequest(
                 method = SimklHttpMethod.POST,
                 path = "/scrobble/${action.wireValue}",
+                query = if (recordRewatch) SIMKL_ALLOW_REWATCH_QUERY else emptyMap(),
                 body = buildSimklScrobbleBody(event, json),
                 retryPolicy = SimklRetryPolicy.NEVER,
                 scrobbleStopConflictIsSuccess = action == TrackingScrobbleAction.STOP,
@@ -194,19 +199,40 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
     ) {
         if (!isActiveProfile(profileId)) return
         SimklSyncRepository.ensureLoaded()
+        TrackingSettingsRepository.ensureLoaded()
         val enriched = SimklSyncRepository.state.value.snapshot.enrichMediaReference(event.media)
+        val media = enriched.resolveAnimeEpisodeForSimkl()
+        // One flag for every connected provider, so the rewatch decision has to be made before the
+        // scrobble leaves this file: only Simkl has rewatch sessions.
+        val recordRewatch = shouldRecordSimklRewatch(
+            mode = TrackingSettingsRepository.uiState.value.simklRewatchMode,
+            accountType = SimklAuthRepository.uiState.value.accountType,
+            action = action,
+            progressPercent = event.progressPercent,
+            manualIntentArmed = RewatchIntentRepository.isArmed(media),
+        )
         val result = service.scrobble(
             action = action,
-            event = event.copy(
-                media = enriched.resolveAnimeEpisodeForSimkl(),
-            ),
+            event = event.copy(media = media),
+            recordRewatch = recordRewatch,
         )
         if (action != TrackingScrobbleAction.START) {
             SimklSyncRepository.commitScrobble(result)
         }
+        if (recordRewatch && result.outcome == SimklScrobbleOutcome.SCROBBLE) {
+            RewatchIntentRepository.consume(media)
+        }
+        if (recordRewatch || result.rewatchStatus != null) {
+            log.i {
+                "Simkl rewatch action=${action.wireValue} status=" +
+                    "${result.rewatchStatus?.name?.lowercase() ?: "none"} rewatching=${result.rewatchId != null}"
+            }
+        }
     }
 
     private fun isActiveProfile(profileId: Int): Boolean = ProfileRepository.activeProfileId == profileId
+
+    private val log = Logger.withTag("SimklMutation")
 }
 
 internal fun buildSimklListMutationBody(
