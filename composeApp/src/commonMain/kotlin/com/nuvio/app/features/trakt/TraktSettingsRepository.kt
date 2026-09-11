@@ -7,7 +7,7 @@ import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.simkl.DEFAULT_SIMKL_ANIME_ID_PREFERENCE
 import com.nuvio.app.features.simkl.SimklAnimeIdPreference
 import com.nuvio.app.features.simkl.SimklRewatchMode
-import com.nuvio.app.features.tracking.RewatchIntentRepository
+import com.nuvio.app.features.tracking.RewatchPromptRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -153,7 +153,7 @@ object TraktSettingsRepository {
         _uiState.value = _uiState.value.copy(simklRewatchMode = mode)
         persist()
         if (!mode.isEnabled) {
-            RewatchIntentRepository.clear()
+            RewatchPromptRepository.clear()
         }
     }
 
