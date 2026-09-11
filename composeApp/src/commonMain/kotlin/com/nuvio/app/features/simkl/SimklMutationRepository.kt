@@ -2,7 +2,8 @@ package com.nuvio.app.features.simkl
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.features.profiles.ProfileRepository
-import com.nuvio.app.features.tracking.RewatchIntentRepository
+import com.nuvio.app.features.tracking.RewatchPrompt
+import com.nuvio.app.features.tracking.RewatchPromptRepository
 import com.nuvio.app.features.tracking.TrackingEpisode
 import com.nuvio.app.features.tracking.TrackingExternalIds
 import com.nuvio.app.features.tracking.TrackingHistoryItem
@@ -60,18 +61,22 @@ internal class SimklMutationService(
     suspend fun removeFromList(items: Collection<TrackingMediaReference>): TrackingMutationResult =
         removeFromHistory(items)
 
-    suspend fun addToHistory(items: Collection<TrackingHistoryItem>): TrackingMutationResult {
+    suspend fun addToHistory(
+        items: Collection<TrackingHistoryItem>,
+        allowRewatch: Boolean = false,
+    ): TrackingMutationResult {
         val candidates = items.toList().also { historyItems ->
             require(historyItems.all { item -> item.media.hasResolvableIdentity }) {
                 "Simkl mutation requires a media ID or title for every item"
             }
         }
         if (candidates.isEmpty()) return TrackingMutationResult(attemptedCount = 0)
-        val body = buildSimklHistoryMutationBody(candidates, json)
+        val body = buildSimklHistoryMutationBody(candidates, isRewatch = allowRewatch, json = json)
         val response = client.execute(
             SimklApiRequest(
                 method = SimklHttpMethod.POST,
                 path = "/sync/history",
+                query = if (allowRewatch) SIMKL_ALLOW_REWATCH_QUERY else emptyMap(),
                 body = body,
                 retryPolicy = SimklRetryPolicy.SYNC_WRITE,
             ),
@@ -200,33 +205,76 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         if (!isActiveProfile(profileId)) return
         SimklSyncRepository.ensureLoaded()
         TrackingSettingsRepository.ensureLoaded()
-        val enriched = SimklSyncRepository.state.value.snapshot.enrichMediaReference(event.media)
-        val media = enriched.resolveAnimeEpisodeForSimkl()
-        // One flag for every connected provider, so the rewatch decision has to be made before the
-        // scrobble leaves this file: only Simkl has rewatch sessions.
-        val recordRewatch = shouldRecordSimklRewatch(
-            mode = TrackingSettingsRepository.uiState.value.simklRewatchMode,
-            accountType = SimklAuthRepository.uiState.value.accountType,
+        val snapshot = SimklSyncRepository.state.value.snapshot
+        val media = snapshot.enrichMediaReference(event.media).resolveAnimeEpisodeForSimkl()
+        val mode = TrackingSettingsRepository.uiState.value.simklRewatchMode
+        val accountType = SimklAuthRepository.uiState.value.accountType
+        val recordRewatch = shouldRecordSimklRewatchOnStop(
+            mode = mode,
+            accountType = accountType,
             action = action,
             progressPercent = event.progressPercent,
-            manualIntentArmed = RewatchIntentRepository.isArmed(media),
         )
         val result = service.scrobble(
             action = action,
             event = event.copy(media = media),
             recordRewatch = recordRewatch,
         )
+        // The snapshot is read before the watch is committed, otherwise the playback would look like
+        // a repeat viewing of itself. Only a stop can produce a rewatch question.
+        val priorWatch = if (action == TrackingScrobbleAction.STOP) {
+            snapshot.priorWatchForScrobble(result)
+        } else {
+            SimklPriorWatch.None
+        }
         if (action != TrackingScrobbleAction.START) {
             SimklSyncRepository.commitScrobble(result)
-        }
-        if (recordRewatch && result.outcome == SimklScrobbleOutcome.SCROBBLE) {
-            RewatchIntentRepository.consume(media)
         }
         if (recordRewatch || result.rewatchStatus != null) {
             log.i {
                 "Simkl rewatch action=${action.wireValue} status=" +
                     "${result.rewatchStatus?.name?.lowercase() ?: "none"} rewatching=${result.rewatchId != null}"
             }
+        }
+        val nowEpochMs = SimklPlatformClock.nowEpochMs()
+        val askToRecord = shouldPromptSimklRewatch(
+            mode = mode,
+            accountType = accountType,
+            action = action,
+            outcome = result.outcome,
+            progressPercent = result.progress,
+            priorWatch = priorWatch,
+            nowEpochMs = nowEpochMs,
+        )
+        if (askToRecord) {
+            RewatchPromptRepository.request(
+                RewatchPrompt(
+                    media = media,
+                    watchedAtEpochMs = result.watchedAt?.let(::parseSimklUtcEpochMs) ?: nowEpochMs,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Writes the rewatch session for a playback the user confirmed. Simkl leaves the canonical row
+     * untouched and keeps the viewing as its own session, which is why the write happens after the
+     * scrobble instead of on it: nothing can be recorded before the user answers.
+     */
+    suspend fun recordConfirmedRewatch(prompt: RewatchPrompt) {
+        if (!isActiveProfile(ProfileRepository.activeProfileId)) return
+        runCatching {
+            service.addToHistory(
+                items = listOf(
+                    TrackingHistoryItem(
+                        media = prompt.media.resolveAnimeEpisodeForSimkl(),
+                        watchedAtEpochMs = prompt.watchedAtEpochMs,
+                    ),
+                ),
+                allowRewatch = true,
+            )
+        }.onFailure { error ->
+            log.w { "Failed to record confirmed Simkl rewatch: ${error.message}" }
         }
     }
 
@@ -258,8 +306,9 @@ internal fun buildSimklListMutationBody(
 
 internal fun buildSimklHistoryMutationBody(
     items: Collection<TrackingHistoryItem>,
+    isRewatch: Boolean = false,
     json: Json = SimklMutationJson,
-): String = json.encodeToString(buildHistoryRequest(items, includeWatchedAt = true))
+): String = json.encodeToString(buildHistoryRequest(items, includeWatchedAt = true, isRewatch = isRewatch))
 
 internal fun buildSimklHistoryRemovalBody(
     items: Collection<TrackingMediaReference>,
@@ -268,6 +317,7 @@ internal fun buildSimklHistoryRemovalBody(
     buildHistoryRequest(
         items = items.map { media -> TrackingHistoryItem(media = media) },
         includeWatchedAt = false,
+        isRewatch = false,
     ),
 )
 
@@ -299,6 +349,7 @@ internal fun buildSimklScrobbleBody(
 private fun buildHistoryRequest(
     items: Collection<TrackingHistoryItem>,
     includeWatchedAt: Boolean,
+    isRewatch: Boolean,
 ): SimklHistoryMutationRequestDto {
     val movies = items
         .filter { item -> item.media.kind == TrackingMediaKind.MOVIE }
@@ -306,19 +357,21 @@ private fun buildHistoryRequest(
             item.media.toHistoryItemDto(
                 watchedAtEpochMs = item.watchedAtEpochMs.takeIf { includeWatchedAt },
                 includeWatchedAt = includeWatchedAt,
+                isRewatch = isRewatch,
             )
         }
     val shows = items
         .filter { item -> item.media.kind != TrackingMediaKind.MOVIE }
         .groupBy { item -> item.media.stableKey }
         .values
-        .map { matchingItems -> buildShowHistoryItem(matchingItems, includeWatchedAt) }
+        .map { matchingItems -> buildShowHistoryItem(matchingItems, includeWatchedAt, isRewatch) }
     return SimklHistoryMutationRequestDto(movies = movies, shows = shows)
 }
 
 private fun buildShowHistoryItem(
     items: List<TrackingHistoryItem>,
     includeWatchedAt: Boolean,
+    isRewatch: Boolean,
 ): SimklHistoryItemDto {
     val first = items.first()
     val parentMutation = items.lastOrNull { item -> item.media.episode == null }
@@ -327,6 +380,7 @@ private fun buildShowHistoryItem(
             watchedAtEpochMs = parentMutation.watchedAtEpochMs.takeIf { includeWatchedAt },
             includeWatchedAt = includeWatchedAt,
             status = if (includeWatchedAt) TrackingListStatus.COMPLETED.wireValue else null,
+            isRewatch = isRewatch,
         )
     }
 
@@ -368,6 +422,7 @@ private fun buildShowHistoryItem(
         episodes = flatEpisodes,
         seasons = seasons,
         useTvdbAnimeSeasons = first.media.kind == TrackingMediaKind.ANIME && seasons.isNotEmpty(),
+        isRewatch = isRewatch,
     )
 }
 
@@ -378,6 +433,7 @@ private fun TrackingMediaReference.toHistoryItemDto(
     episodes: List<SimklEpisodeMutationDto> = emptyList(),
     seasons: List<SimklSeasonMutationDto> = emptyList(),
     useTvdbAnimeSeasons: Boolean = false,
+    isRewatch: Boolean = false,
 ): SimklHistoryItemDto = SimklHistoryItemDto(
     title = title.nonBlankOrNull(),
     year = year,
@@ -387,6 +443,7 @@ private fun TrackingMediaReference.toHistoryItemDto(
     episodes = episodes,
     seasons = seasons,
     useTvdbAnimeSeasons = useTvdbAnimeSeasons,
+    isRewatch = isRewatch.takeIf { it },
 )
 
 private fun TrackingMediaReference.toScrobbleMediaDto(): SimklScrobbleMediaDto =
@@ -493,6 +550,7 @@ private data class SimklHistoryItemDto(
     val episodes: List<SimklEpisodeMutationDto> = emptyList(),
     val seasons: List<SimklSeasonMutationDto> = emptyList(),
     @SerialName("use_tvdb_anime_seasons") val useTvdbAnimeSeasons: Boolean = false,
+    @SerialName("is_rewatch") val isRewatch: Boolean? = null,
 )
 
 @Serializable
