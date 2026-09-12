@@ -1,6 +1,7 @@
 package com.nuvio.app.features.simkl
 
 import com.nuvio.app.core.time.parseZonedIsoDateTimeToEpochMs
+import com.nuvio.app.features.tracking.RewatchRunPosition
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,7 +81,7 @@ class SimklRewatchRunsTest {
         assertFalse(run.matches(null))
     }
 
-    private fun runs(vararg rows: SimklLibraryEntry): List<SimklRewatchRun> =
+    private fun runs(vararg rows: SimklLibraryEntry): List<RewatchRunPosition> =
         deriveSimklRewatchRuns(
             entries = rows.toList(),
             animeIdPreference = SimklAnimeIdPreference.IMDB,
