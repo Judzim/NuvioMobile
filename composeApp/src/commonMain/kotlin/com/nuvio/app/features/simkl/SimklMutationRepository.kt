@@ -2,12 +2,8 @@ package com.nuvio.app.features.simkl
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.features.profiles.ProfileRepository
-import com.nuvio.app.features.tracking.RewatchContinueWatchingAction
-import com.nuvio.app.features.tracking.RewatchContinueWatchingSeed
 import com.nuvio.app.features.tracking.RewatchPrompt
 import com.nuvio.app.features.tracking.RewatchPromptRepository
-import com.nuvio.app.features.tracking.buildRewatchContinueWatchingSeed
-import com.nuvio.app.features.tracking.rewatchContinueWatchingAction
 import com.nuvio.app.features.tracking.TrackingEpisode
 import com.nuvio.app.features.tracking.TrackingExternalIds
 import com.nuvio.app.features.tracking.TrackingHistoryItem
@@ -24,7 +20,6 @@ import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.tracking.TrackingScrobbleEvent
 import com.nuvio.app.features.tracking.TrackingScrobbler
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
-import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -243,14 +238,6 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         }
         val nowEpochMs = SimklPlatformClock.nowEpochMs()
         val watchedAtEpochMs = result.watchedAt?.let(::parseSimklUtcEpochMs) ?: nowEpochMs
-        // The rewatch run position, used both by the prompt and by automatic mode. It is only built
-        // while rewatches are enabled at all, and it stays null for movies and episodes without
-        // coordinates.
-        val continueWatchingSeed = if (mode.isEnabled) {
-            buildRewatchContinueWatchingSeed(media = media, watchedAtEpochMs = watchedAtEpochMs)
-        } else {
-            null
-        }
         val askToRecord = shouldPromptSimklRewatch(
             mode = mode,
             accountType = accountType,
@@ -265,46 +252,8 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
                 RewatchPrompt(
                     media = media,
                     watchedAtEpochMs = watchedAtEpochMs,
-                    continueWatchingSeed = continueWatchingSeed,
                 ),
             )
-        }
-        // Manual mode decides in the prompt; automatic mode has nobody to ask, so a run that starts
-        // a season adds itself to Continue Watching and later episodes keep it moving.
-        if (mode == SimklRewatchMode.AUTOMATIC) {
-            applyAutomaticRewatchContinueWatching(
-                mode = mode,
-                rewatchStatus = result.rewatchStatus,
-                seed = continueWatchingSeed,
-            )
-        }
-    }
-
-    /**
-     * Continues Watching follows the rewatch run in automatic mode: the first episode of a season
-     * starts it, and the following episodes of the same run advance it. A rewatch of an unrelated
-     * episode leaves the row where it is.
-     */
-    private fun applyAutomaticRewatchContinueWatching(
-        mode: SimklRewatchMode,
-        rewatchStatus: SimklRewatchStatus?,
-        seed: RewatchContinueWatchingSeed?,
-    ) {
-        if (seed == null) return
-        val existing = ContinueWatchingPreferencesRepository.rewatchContinueWatchingSeedFor(seed.contentId)
-        val action = rewatchContinueWatchingAction(
-            mode = mode,
-            rewatchStatus = rewatchStatus,
-            seasonNumber = seed.seasonNumber,
-            episodeNumber = seed.episodeNumber,
-            hasExistingSeed = existing != null,
-            existingSeedSeason = existing?.seasonNumber,
-            existingSeedEpisode = existing?.episodeNumber,
-        )
-        if (action == RewatchContinueWatchingAction.NONE) return
-        ContinueWatchingPreferencesRepository.setRewatchContinueWatchingSeed(seed)
-        if (action == RewatchContinueWatchingAction.START && existing != null) {
-            log.i { "Simkl rewatch restarted the Continue Watching run" }
         }
     }
 
@@ -312,13 +261,14 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
      * Writes the rewatch session for a playback the user confirmed. Simkl leaves the canonical row
      * untouched and keeps the viewing as its own session, which is why the write happens after the
      * scrobble instead of on it: nothing can be recorded before the user answers.
+     *
+     * Continue Watching is not touched here. Whether the series joins the row is decided by the
+     * account: once two episodes of the run are rewatched, the next sync reads them back and the row
+     * follows, on every device.
      */
-    suspend fun recordConfirmedRewatch(
-        prompt: RewatchPrompt,
-        includeInContinueWatching: Boolean = false,
-    ): Boolean {
+    suspend fun recordConfirmedRewatch(prompt: RewatchPrompt): Boolean {
         if (!isActiveProfile(ProfileRepository.activeProfileId)) return false
-        val recorded = runCatching {
+        return runCatching {
             service.addToHistory(
                 items = listOf(
                     TrackingHistoryItem(
@@ -331,12 +281,6 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         }.onFailure { error ->
             log.w { "Failed to record confirmed Simkl rewatch: ${error.message}" }
         }.isSuccess
-        if (!recorded) return false
-        // The series only follows the run when the user picked that answer in the prompt.
-        if (!includeInContinueWatching) return true
-        val seed = prompt.continueWatchingSeed ?: return true
-        ContinueWatchingPreferencesRepository.setRewatchContinueWatchingSeed(seed)
-        return true
     }
 
     private fun isActiveProfile(profileId: Int): Boolean = ProfileRepository.activeProfileId == profileId
