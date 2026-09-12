@@ -522,12 +522,24 @@ class SimklSyncEngineTest {
             else -> error("Expected playback, got $step")
         }
 
-        /** The rewatch read stays out of the scripted order: it only consumes a step when one fits. */
+        /**
+         * The rewatch read stays out of the scripted order: it only consumes a step when one fits, so a
+         * script written for the other calls still reads as no sessions. A scripted failure is taken,
+         * because a read that fails is a case of its own (the run keeps waiting for a successful read).
+         */
         override suspend fun fetchRewatchSessions(): List<SimklLibraryEntry> {
             val step = remaining.firstOrNull() ?: return emptyList()
-            if (step !is Step.RewatchSessions) return emptyList()
-            remaining.removeAt(0)
-            return step.value
+            return when (step) {
+                is Step.RewatchSessions -> {
+                    remaining.removeAt(0)
+                    step.value
+                }
+                is Step.Failure -> {
+                    remaining.removeAt(0)
+                    throw step.error
+                }
+                else -> emptyList()
+            }
         }
 
         private fun next(): Step = remaining.removeAt(0)
