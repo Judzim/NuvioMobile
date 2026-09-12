@@ -1,16 +1,20 @@
 package com.nuvio.app.features.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -31,6 +35,7 @@ import com.nuvio.app.features.simkl.SimklAuthRepository
 import com.nuvio.app.features.simkl.SimklAuthUiState
 import com.nuvio.app.features.simkl.SimklConnectionMode
 import com.nuvio.app.features.simkl.SimklRewatchMode
+import com.nuvio.app.features.simkl.SimklWatchedThresholdRange
 import com.nuvio.app.features.simkl.isSimklRewatchModeSelectable
 import com.nuvio.app.features.tracking.TrackingProviderId
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
@@ -63,6 +68,9 @@ import nuvio.composeapp.generated.resources.settings_tracking_rewatch_off
 import nuvio.composeapp.generated.resources.settings_tracking_rewatch_off_description
 import nuvio.composeapp.generated.resources.settings_tracking_rewatch_subtitle
 import nuvio.composeapp.generated.resources.settings_tracking_rewatch_title
+import nuvio.composeapp.generated.resources.settings_tracking_completion_subtitle
+import nuvio.composeapp.generated.resources.settings_tracking_completion_title
+import nuvio.composeapp.generated.resources.settings_tracking_completion_value
 import nuvio.composeapp.generated.resources.settings_tracking_services
 import nuvio.composeapp.generated.resources.settings_tracking_simkl_library_description
 import nuvio.composeapp.generated.resources.settings_tracking_simkl_progress_description
@@ -111,6 +119,7 @@ import nuvio.composeapp.generated.resources.trakt_watch_progress_source_nuvio
 import nuvio.composeapp.generated.resources.trakt_watch_progress_source_trakt
 import nuvio.composeapp.generated.resources.trakt_watch_progress_subtitle
 import nuvio.composeapp.generated.resources.trakt_watch_progress_title
+import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.stringResource
 
 internal fun LazyListScope.trackingSettingsContent(
@@ -626,6 +635,11 @@ private fun SimklFeaturesSection(
             isTablet = isTablet,
             onClick = { showRewatchPicker = true },
         )
+        SettingsGroupDivider(isTablet = isTablet)
+        SimklCompletionThresholdRow(
+            percent = settingsUiState.simklWatchedThresholdPercent,
+            isTablet = isTablet,
+        )
     }
 
     if (showAnimeIdPicker) {
@@ -669,6 +683,70 @@ private fun SimklFeaturesSection(
 
     if (showRewatchUpgradeDialog) {
         SimklRewatchUpgradeDialog(onDismiss = { showRewatchUpgradeDialog = false })
+    }
+}
+
+/**
+ * Where a Simkl playback counts as finished.
+ *
+ * The slider cannot start below 80%: Simkl marks a playback watched at that point itself. Everything
+ * above is the user's call, and a playback stopped below the chosen value is reported to Simkl as a
+ * pause, so stopping early cannot mark a title watched behind the user's back.
+ */
+@Composable
+private fun SimklCompletionThresholdRow(
+    percent: Int,
+    isTablet: Boolean,
+) {
+    val horizontalPadding = if (isTablet) 20.dp else 16.dp
+    var sliderValue by remember(percent) { mutableFloatStateOf(percent.toFloat()) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(Res.string.settings_tracking_completion_title),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = stringResource(
+                    Res.string.settings_tracking_completion_value,
+                    sliderValue.roundToInt(),
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = stringResource(Res.string.settings_tracking_completion_subtitle),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = sliderValue,
+            onValueChange = { candidate -> sliderValue = candidate },
+            onValueChangeFinished = {
+                TrackingSettingsRepository.setSimklWatchedThresholdPercent(sliderValue.roundToInt())
+            },
+            valueRange = SimklWatchedThresholdRange.first.toFloat()..
+                SimklWatchedThresholdRange.last.toFloat(),
+            steps = SimklWatchedThresholdRange.last - SimklWatchedThresholdRange.first - 1,
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

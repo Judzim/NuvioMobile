@@ -44,4 +44,8 @@ object TrackingSettingsRepository {
 
     fun setSimklRewatchMode(mode: SimklRewatchMode) =
         TraktSettingsRepository.setSimklRewatchMode(mode)
+
+    /** Where a Simkl playback counts as finished, in percent. */
+    fun setSimklWatchedThresholdPercent(percent: Int) =
+        TraktSettingsRepository.setSimklWatchedThresholdPercent(percent)
 }
