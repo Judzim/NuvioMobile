@@ -206,6 +206,25 @@ internal fun MetaDetails.seriesPrimaryAction(
 internal fun MetaVideo.playLabel(): String =
     playLabel(seasonNumber = season, episodeNumber = episode)
 
+/**
+ * What the primary button says for a title that is not a series with a chosen episode.
+ *
+ * A watched film kept an ordinary Play label, so nothing on the screen told the user it had been
+ * seen already and the button could not be told apart from a first viewing. It now offers the film
+ * again. Unfinished progress still wins, because continuing is what the user wants then.
+ */
+internal fun movieLikePlayLabel(
+    hasUnfinishedProgress: Boolean,
+    isWatched: Boolean,
+    resumeLabel: String,
+    watchAgainLabel: String,
+    playLabel: String,
+): String = when {
+    hasUnfinishedProgress -> resumeLabel
+    isWatched -> watchAgainLabel
+    else -> playLabel
+}
+
 internal fun MetaVideo.upNextLabel(): String =
     upNextLabel(seasonNumber = season, episodeNumber = episode)
 
