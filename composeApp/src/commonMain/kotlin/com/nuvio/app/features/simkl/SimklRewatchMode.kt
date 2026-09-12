@@ -63,6 +63,13 @@ internal fun coerceSimklWatchedThresholdPercent(percent: Int): Int = percent.coe
 /** Simkl merges two watches of the same item this close together, so asking would be pointless. */
 internal const val SIMKL_REWATCH_MIN_GAP_MS = 48L * 60L * 60L * 1_000L
 
+/**
+ * Simkl reports a session it has just accepted a moment later, so the read that answers whether the
+ * rewatch landed waits first. Without the wait the app called a recorded rewatch a failure.
+ */
+internal const val SIMKL_REWATCH_SESSION_READ_ATTEMPTS = 3
+internal const val SIMKL_REWATCH_SESSION_READ_DELAY_MS = 1_200L
+
 /** Query Simkl expects on the calls that are allowed to record a rewatch session. */
 internal val SIMKL_ALLOW_REWATCH_QUERY: Map<String, String> = mapOf("allow_rewatch" to "yes")
 
