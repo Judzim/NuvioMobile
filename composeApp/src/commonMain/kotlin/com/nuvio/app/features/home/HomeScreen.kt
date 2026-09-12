@@ -1474,11 +1474,8 @@ private suspend fun resolveHomeNextUpCandidate(
             todayIsoDate = todayIsoDate,
             preferFurthestEpisode = preferFurthestEpisode,
             showUnairedNextUp = showUnairedNextUp,
-        )
-        if (action == null) {
-            return HomeNextUpResolutionAttempt.conclusiveNone()
-        }
-        if (action.resumePositionMs != null) {
+        ) ?: return HomeNextUpResolutionAttempt.conclusiveNone()
+        if (homeNextUpOffersNothing(action)) {
             return HomeNextUpResolutionAttempt.conclusiveNone()
         }
         meta.videoForSeriesAction(action) ?: return HomeNextUpResolutionAttempt.conclusiveNone()
