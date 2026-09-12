@@ -11,18 +11,20 @@ import kotlin.test.assertTrue
 class RewatchContinueWatchingTest {
     @Test
     fun `a show episode with a catalogue id seeds the run`() {
-        val seed = buildRewatchContinueWatchingSeed(
-            media = showMedia(season = 1, episode = 1),
-            watchedAtEpochMs = 1_700_000_000_000,
+        val seed = requireNotNull(
+            buildRewatchContinueWatchingSeed(
+                media = showMedia(season = 1, episode = 1),
+                watchedAtEpochMs = 1_700_000_000_000,
+            ),
         )
 
-        assertEquals("tt2861424", seed?.contentId)
-        assertEquals(1, seed?.seasonNumber)
-        assertEquals(1, seed?.episodeNumber)
-        assertEquals(1_700_000_000_000, seed?.markedAtEpochMs)
-        assertTrue(seed?.matchKeys?.contains("imdb:tt2861424") == true)
-        assertTrue(seed?.matchKeys?.contains("tmdb:60625") == true)
-        assertTrue(seed?.matchKeys?.contains("simkl:34902") == true)
+        assertEquals("tt2861424", seed.contentId)
+        assertEquals(1, seed.seasonNumber)
+        assertEquals(1, seed.episodeNumber)
+        assertEquals(1_700_000_000_000, seed.markedAtEpochMs)
+        assertTrue(seed.matchKeys.contains("imdb:tt2861424"))
+        assertTrue(seed.matchKeys.contains("tmdb:60625"))
+        assertTrue(seed.matchKeys.contains("simkl:34902"))
     }
 
     @Test

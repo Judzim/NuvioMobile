@@ -101,10 +101,10 @@ internal fun buildRewatchContinueWatchingSeed(
     watchedAtEpochMs: Long,
 ): RewatchContinueWatchingSeed? {
     if (media.kind == TrackingMediaKind.MOVIE) return null
-    val season = media.episode?.season ?: return null
+    val episode = media.episode ?: return null
+    val season = episode.season ?: return null
     if (season == 0) return null
-    val episode = media.episode?.number ?: return null
-    if (episode <= 0) return null
+    if (episode.number <= 0) return null
     return RewatchContinueWatchingSeed(
         contentId = media.rewatchContinueWatchingContentId(),
         matchKeys = media.rewatchContinueWatchingMatchKeys(),

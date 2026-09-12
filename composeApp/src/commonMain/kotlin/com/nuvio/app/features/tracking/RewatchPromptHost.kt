@@ -31,7 +31,7 @@ import nuvio.composeapp.generated.resources.rewatch_prompt_title
 import org.jetbrains.compose.resources.stringResource
 
 /** How long the question stays on screen before it counts as a no. */
-private const val REWATCH_PROMPT_TIMEOUT_MS = 6_000L
+private const val REWATCH_PROMPT_TIMEOUT_MS = 8_000L
 
 /**
  * Shows the rewatch question above the rest of the app. It is deliberately a popup instead of part
