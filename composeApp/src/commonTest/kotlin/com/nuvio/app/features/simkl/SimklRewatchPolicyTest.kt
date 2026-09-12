@@ -49,6 +49,39 @@ class SimklRewatchPolicyTest {
     }
 
     @Test
+    fun `a playback below the chosen threshold is not a finished watch`() {
+        assertFalse(
+            stopFlagRequested(
+                mode = SimklRewatchMode.AUTOMATIC,
+                progressPercent = 85.0,
+                completionThresholdPercent = 90.0,
+            ),
+        )
+        assertTrue(
+            stopFlagRequested(
+                mode = SimklRewatchMode.AUTOMATIC,
+                progressPercent = 92.0,
+                completionThresholdPercent = 90.0,
+            ),
+        )
+        assertFalse(
+            promptRequested(
+                mode = SimklRewatchMode.MANUAL,
+                progressPercent = 85.0,
+                completionThresholdPercent = 90.0,
+            ),
+        )
+    }
+
+    @Test
+    fun `the threshold can never start below Simkl's own mark`() {
+        assertEquals(80, coerceSimklWatchedThresholdPercent(40))
+        assertEquals(88, coerceSimklWatchedThresholdPercent(88))
+        assertEquals(95, coerceSimklWatchedThresholdPercent(120))
+        assertEquals(80, SIMKL_WATCHED_THRESHOLD_DEFAULT_PERCENT)
+    }
+
+    @Test
     fun `manual never flags the scrobble itself`() {
         assertFalse(stopFlagRequested(mode = SimklRewatchMode.MANUAL, progressPercent = 100.0))
     }
@@ -251,11 +284,13 @@ class SimklRewatchPolicyTest {
         accountType: String? = "pro",
         action: TrackingScrobbleAction = TrackingScrobbleAction.STOP,
         progressPercent: Double = 95.0,
+        completionThresholdPercent: Double = SIMKL_REWATCH_MIN_PROGRESS_PERCENT,
     ): Boolean = shouldRecordSimklRewatchOnStop(
         mode = mode,
         accountType = accountType,
         action = action,
         progressPercent = progressPercent,
+        completionThresholdPercent = completionThresholdPercent,
     )
 
     private fun promptRequested(
@@ -266,6 +301,7 @@ class SimklRewatchPolicyTest {
         progressPercent: Double = 95.0,
         watched: Boolean = true,
         watchedAtEpochMs: Long? = null,
+        completionThresholdPercent: Double = SIMKL_REWATCH_MIN_PROGRESS_PERCENT,
     ): Boolean = shouldPromptSimklRewatch(
         mode = mode,
         accountType = accountType,
@@ -274,6 +310,7 @@ class SimklRewatchPolicyTest {
         progressPercent = progressPercent,
         priorWatch = SimklPriorWatch(wasWatched = watched, watchedAtEpochMs = watchedAtEpochMs),
         nowEpochMs = NOW_EPOCH_MS,
+        completionThresholdPercent = completionThresholdPercent,
     )
 
     private fun scrobbleResult(body: String) = SimklApiResponse(
