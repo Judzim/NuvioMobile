@@ -9,6 +9,11 @@ import kotlinx.coroutines.flow.asStateFlow
 data class RewatchPrompt(
     val media: TrackingMediaReference,
     val watchedAtEpochMs: Long,
+    /**
+     * Where the series sits in the rewatch run. Present when the prompt can also put the series
+     * into Continue Watching (see [RewatchContinueWatchingSeed]).
+     */
+    val continueWatchingSeed: RewatchContinueWatchingSeed? = null,
 )
 
 /**
@@ -31,11 +36,19 @@ object RewatchPromptRepository {
         _prompt.value = null
     }
 
-    /** Records the pending rewatch and closes the prompt. */
-    suspend fun confirm() {
+    /**
+     * Records the pending rewatch and closes the prompt.
+     *
+     * [includeInContinueWatching] is the prompt's second answer: the rewatch is written either way,
+     * and the extra flag additionally lets the series follow the run in Continue Watching.
+     */
+    suspend fun confirm(includeInContinueWatching: Boolean = false) {
         val active = _prompt.value ?: return
         _prompt.value = null
-        SimklMutationRepository.recordConfirmedRewatch(active)
+        SimklMutationRepository.recordConfirmedRewatch(
+            prompt = active,
+            includeInContinueWatching = includeInContinueWatching,
+        )
     }
 
     fun clear() {

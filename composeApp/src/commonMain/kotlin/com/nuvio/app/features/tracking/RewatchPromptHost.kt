@@ -1,6 +1,7 @@
 package com.nuvio.app.features.tracking
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,17 +25,21 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.rewatch_prompt_confirm
+import nuvio.composeapp.generated.resources.rewatch_prompt_confirm_continue
 import nuvio.composeapp.generated.resources.rewatch_prompt_dismiss
 import nuvio.composeapp.generated.resources.rewatch_prompt_title
 import org.jetbrains.compose.resources.stringResource
 
 /** How long the question stays on screen before it counts as a no. */
-private const val REWATCH_PROMPT_TIMEOUT_MS = 6_000L
+private const val REWATCH_PROMPT_TIMEOUT_MS = 8_000L
 
 /**
  * Shows the rewatch question above the rest of the app. It is deliberately a popup instead of part
  * of a screen: the playback that triggered it can end on any screen, and an unanswered question
  * must never block navigation or playback.
+ *
+ * The second answer keeps the series in Continue Watching, which is how a rewatch run started at
+ * S01E01 offers S01E02 next instead of pointing back at the canonical watch position.
  */
 @Composable
 fun RewatchPromptHost() {
@@ -61,25 +66,54 @@ fun RewatchPromptHost() {
             tonalElevation = 6.dp,
             shadowElevation = 8.dp,
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     text = stringResource(Res.string.rewatch_prompt_title),
-                    modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Medium,
                 )
-                TextButton(onClick = RewatchPromptRepository::dismiss) {
-                    Text(stringResource(Res.string.rewatch_prompt_dismiss))
-                }
-                TextButton(onClick = { scope.launch { RewatchPromptRepository.confirm() } }) {
-                    Text(stringResource(Res.string.rewatch_prompt_confirm))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = RewatchPromptRepository::dismiss,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.rewatch_prompt_dismiss),
+                            maxLines = 2,
+                        )
+                    }
+                    TextButton(
+                        onClick = { scope.launch { RewatchPromptRepository.confirm() } },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.rewatch_prompt_confirm),
+                            maxLines = 2,
+                        )
+                    }
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                RewatchPromptRepository.confirm(includeInContinueWatching = true)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.rewatch_prompt_confirm_continue),
+                            maxLines = 2,
+                        )
+                    }
                 }
             }
         }
