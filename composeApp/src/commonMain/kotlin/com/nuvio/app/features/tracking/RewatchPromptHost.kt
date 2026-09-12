@@ -27,9 +27,7 @@ import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.rewatch_notice_declined
 import nuvio.composeapp.generated.resources.rewatch_notice_failed
 import nuvio.composeapp.generated.resources.rewatch_notice_recorded
-import nuvio.composeapp.generated.resources.rewatch_notice_recorded_run
 import nuvio.composeapp.generated.resources.rewatch_prompt_confirm
-import nuvio.composeapp.generated.resources.rewatch_prompt_confirm_continue
 import nuvio.composeapp.generated.resources.rewatch_prompt_dismiss
 import nuvio.composeapp.generated.resources.rewatch_prompt_title
 import org.jetbrains.compose.resources.stringResource
@@ -114,19 +112,6 @@ private fun RewatchQuestionPopup() {
                             maxLines = 2,
                         )
                     }
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                RewatchPromptRepository.confirm(includeInContinueWatching = true)
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.rewatch_prompt_confirm_continue),
-                            maxLines = 2,
-                        )
-                    }
                 }
             }
         }
@@ -170,7 +155,6 @@ private fun RewatchNoticePopup() {
 private fun RewatchNoticeKind.message(): String = stringResource(
     when (this) {
         RewatchNoticeKind.RECORDED -> Res.string.rewatch_notice_recorded
-        RewatchNoticeKind.RECORDED_WITH_RUN -> Res.string.rewatch_notice_recorded_run
         RewatchNoticeKind.NOT_RECORDED -> Res.string.rewatch_notice_declined
         RewatchNoticeKind.FAILED -> Res.string.rewatch_notice_failed
     },

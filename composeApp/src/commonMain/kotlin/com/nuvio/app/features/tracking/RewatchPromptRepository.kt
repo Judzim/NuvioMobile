@@ -9,20 +9,12 @@ import kotlinx.coroutines.flow.asStateFlow
 data class RewatchPrompt(
     val media: TrackingMediaReference,
     val watchedAtEpochMs: Long,
-    /**
-     * Where the series sits in the rewatch run. Present when the prompt can also put the series
-     * into Continue Watching (see [RewatchContinueWatchingSeed]).
-     */
-    val continueWatchingSeed: RewatchContinueWatchingSeed? = null,
 )
 
 /** What an answer to the prompt actually did, shown briefly so the tap has visible feedback. */
 enum class RewatchNoticeKind {
     /** The rewatch reached Simkl. */
     RECORDED,
-
-    /** The rewatch reached Simkl and the series now follows the run in Continue Watching. */
-    RECORDED_WITH_RUN,
 
     /** The user answered No, or the question timed out. */
     NOT_RECORDED,
@@ -40,6 +32,10 @@ data class RewatchNotice(val kind: RewatchNoticeKind)
  * a playback into a rewatch session in manual mode. The prompt is cleared on every answer and never
  * survives the session. The answer also leaves a [notice] behind, so the user sees what happened
  * instead of having to trust that a tap did something.
+ *
+ * The answer does not decide anything about Continue Watching: a series joins the row once the
+ * account shows two episodes of the run rewatched, which is a rule that reads the same on every
+ * device (see `deriveSimklRewatchRuns`).
  */
 object RewatchPromptRepository {
     private val _prompt = MutableStateFlow<RewatchPrompt?>(null)
@@ -63,25 +59,13 @@ object RewatchPromptRepository {
         _notice.value = RewatchNotice(RewatchNoticeKind.NOT_RECORDED)
     }
 
-    /**
-     * Records the pending rewatch and closes the prompt.
-     *
-     * [includeInContinueWatching] is the prompt's second answer: the rewatch is written either way,
-     * and the extra flag additionally lets the series follow the run in Continue Watching.
-     */
-    suspend fun confirm(includeInContinueWatching: Boolean = false) {
+    /** Records the pending rewatch and closes the prompt. */
+    suspend fun confirm() {
         val active = _prompt.value ?: return
         _prompt.value = null
-        val recorded = SimklMutationRepository.recordConfirmedRewatch(
-            prompt = active,
-            includeInContinueWatching = includeInContinueWatching,
-        )
+        val recorded = SimklMutationRepository.recordConfirmedRewatch(prompt = active)
         _notice.value = RewatchNotice(
-            when {
-                !recorded -> RewatchNoticeKind.FAILED
-                includeInContinueWatching -> RewatchNoticeKind.RECORDED_WITH_RUN
-                else -> RewatchNoticeKind.RECORDED
-            },
+            if (recorded) RewatchNoticeKind.RECORDED else RewatchNoticeKind.FAILED,
         )
     }
 
