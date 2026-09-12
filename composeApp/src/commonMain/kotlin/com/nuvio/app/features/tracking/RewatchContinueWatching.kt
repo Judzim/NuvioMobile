@@ -109,7 +109,7 @@ internal fun buildRewatchContinueWatchingSeed(
         contentId = media.rewatchContinueWatchingContentId(),
         matchKeys = media.rewatchContinueWatchingMatchKeys(),
         seasonNumber = season,
-        episodeNumber = episode,
+        episodeNumber = episode.number,
         markedAtEpochMs = watchedAtEpochMs,
     )
 }
