@@ -106,6 +106,7 @@ internal class SimklMutationService(
         action: TrackingScrobbleAction,
         event: TrackingScrobbleEvent,
         recordRewatch: Boolean = false,
+        completionThresholdPercent: Double = SIMKL_REWATCH_MIN_PROGRESS_PERCENT,
     ): SimklScrobbleResult {
         require(event.media.hasResolvableIdentity) { "Simkl scrobble requires a media ID or title" }
         require(event.media.kind == TrackingMediaKind.MOVIE || event.media.episode != null) {
@@ -121,7 +122,12 @@ internal class SimklMutationService(
                 scrobbleStopConflictIsSuccess = action == TrackingScrobbleAction.STOP,
             ),
         )
-        return response.toSimklScrobbleResult(action, event, json)
+        return response.toSimklScrobbleResult(
+            requestedAction = action,
+            event = event,
+            json = json,
+            completionThresholdPercent = completionThresholdPercent,
+        )
     }
 
     private fun Collection<TrackingMediaReference>.validated(): List<TrackingMediaReference> =
@@ -209,32 +215,48 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         TrackingSettingsRepository.ensureLoaded()
         val snapshot = SimklSyncRepository.state.value.snapshot
         val media = snapshot.enrichMediaReference(event.media).resolveAnimeEpisodeForSimkl()
-        val mode = TrackingSettingsRepository.uiState.value.simklRewatchMode
+        val settings = TrackingSettingsRepository.uiState.value
+        val mode = settings.simklRewatchMode
         val accountType = SimklAuthRepository.uiState.value.accountType
+        // The user decides where a playback counts as finished, and that single number decides both
+        // what Simkl is told and whether a rewatch can be recorded.
+        val completionThresholdPercent = settings.simklWatchedThresholdPercent.toDouble()
+        // A playback the user stopped below their own threshold is a pause for Simkl: leaving it as a
+        // stop would have Simkl apply its own 80% rule and mark the title watched anyway.
+        val reportingAction = if (
+            action == TrackingScrobbleAction.STOP &&
+            event.progressPercent < completionThresholdPercent
+        ) {
+            TrackingScrobbleAction.PAUSE
+        } else {
+            action
+        }
         val recordRewatch = shouldRecordSimklRewatchOnStop(
             mode = mode,
             accountType = accountType,
-            action = action,
+            action = reportingAction,
             progressPercent = event.progressPercent,
+            completionThresholdPercent = completionThresholdPercent,
         )
         val result = service.scrobble(
-            action = action,
+            action = reportingAction,
             event = event.copy(media = media),
             recordRewatch = recordRewatch,
+            completionThresholdPercent = completionThresholdPercent,
         )
         // The snapshot is read before the watch is committed, otherwise the playback would look like
         // a repeat viewing of itself. Only a stop can produce a rewatch question.
-        val priorWatch = if (action == TrackingScrobbleAction.STOP) {
+        val priorWatch = if (reportingAction == TrackingScrobbleAction.STOP) {
             snapshot.priorWatchForScrobble(result)
         } else {
             SimklPriorWatch.None
         }
-        if (action != TrackingScrobbleAction.START) {
+        if (reportingAction != TrackingScrobbleAction.START) {
             SimklSyncRepository.commitScrobble(result)
         }
         if (recordRewatch || result.rewatchStatus != null) {
             log.i {
-                "Simkl rewatch action=${action.wireValue} status=" +
+                "Simkl rewatch action=${reportingAction.wireValue} status=" +
                     "${result.rewatchStatus?.name?.lowercase() ?: "none"} rewatching=${result.rewatchId != null}"
             }
         }
@@ -243,11 +265,12 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         val askToRecord = shouldPromptSimklRewatch(
             mode = mode,
             accountType = accountType,
-            action = action,
+            action = reportingAction,
             outcome = result.outcome,
             progressPercent = result.progress,
             priorWatch = priorWatch,
             nowEpochMs = nowEpochMs,
+            completionThresholdPercent = completionThresholdPercent,
         )
         if (askToRecord) {
             RewatchPromptRepository.request(
