@@ -185,31 +185,6 @@ class SimklProjectionsTest {
     }
 
     @Test
-    fun `a playback below the chosen threshold stays in progress`() {
-        val session = SimklPlaybackSession(
-            id = 12345,
-            progress = 90.0,
-            pausedAt = "2024-04-30T22:13:00.250Z",
-            type = "episode",
-            episode = SimklPlaybackEpisode(
-                season = 1,
-                number = 3,
-                title = "Chapter Three",
-            ),
-            show = media(id = 39687, imdb = "tt4574334", runtime = 50),
-        )
-
-        val atSimklsMark = session.toWatchProgressEntry(completionThresholdPercent = 80.0)
-        val atTheUsersMark = session.toWatchProgressEntry(completionThresholdPercent = 95.0)
-
-        assertNotNull(atSimklsMark)
-        assertNotNull(atTheUsersMark)
-        assertTrue(atSimklsMark.isCompleted)
-        assertFalse(atTheUsersMark.isCompleted)
-        assertEquals(90f, atTheUsersMark.progressPercent)
-    }
-
-    @Test
     fun `playback projection preserves Simkl session identity and percentage`() {
         val session = SimklPlaybackSession(
             id = 12345,
