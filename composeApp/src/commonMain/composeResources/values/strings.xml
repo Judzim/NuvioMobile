@@ -643,6 +643,10 @@
     <string name="rewatch_prompt_confirm">Record</string>
     <string name="rewatch_prompt_confirm_continue">Add to Next Up</string>
     <string name="rewatch_prompt_dismiss">No</string>
+    <string name="rewatch_notice_recorded">Recorded in Simkl</string>
+    <string name="rewatch_notice_recorded_run">Recorded and added to Next Up</string>
+    <string name="rewatch_notice_declined">Nothing recorded</string>
+    <string name="rewatch_notice_failed">The rewatch could not be recorded</string>
     <string name="home_view_all">View All</string>
     <string name="play_manually">Play manually</string>
     <string name="poster_logo_content_description">%1$s logo</string>
