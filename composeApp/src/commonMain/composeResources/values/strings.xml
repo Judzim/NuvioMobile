@@ -1791,6 +1791,8 @@
     <string name="generic_addon">Addon</string>
     <string name="action_saved">Saved</string>
     <string name="action_play_episode">Play %1$s</string>
+    <string name="action_watch_again">Watch again</string>
+    <string name="action_watch_again_episode">Watch again %1$s</string>
     <string name="action_resume_episode">Resume %1$s</string>
     <string name="collections_import_error_empty_json">JSON is empty.</string>
     <string name="collections_import_error_collection_blank_id">Collection %1$d has blank id.</string>
