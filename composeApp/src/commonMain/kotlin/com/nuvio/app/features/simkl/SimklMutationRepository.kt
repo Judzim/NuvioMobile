@@ -135,6 +135,8 @@ internal class SimklMutationService(
 object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, TrackingScrobbler {
     override val providerId: TrackingProviderId = TrackingProviderId.SIMKL
 
+    private val remote = SimklApiSyncRemote()
+
     private val service by lazy {
         SimklMutationService(
             client = SimklApi.client,
@@ -268,19 +270,33 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
      */
     suspend fun recordConfirmedRewatch(prompt: RewatchPrompt): Boolean {
         if (!isActiveProfile(ProfileRepository.activeProfileId)) return false
-        return runCatching {
+        val media = prompt.media.resolveAnimeEpisodeForSimkl()
+        val written = runCatching {
             service.addToHistory(
                 items = listOf(
                     TrackingHistoryItem(
-                        media = prompt.media.resolveAnimeEpisodeForSimkl(),
+                        media = media,
                         watchedAtEpochMs = prompt.watchedAtEpochMs,
                     ),
                 ),
                 allowRewatch = true,
-            ).isComplete
+            )
         }.onFailure { error ->
             log.w { "Failed to record confirmed Simkl rewatch: ${error.message}" }
-        }.getOrDefault(false)
+        }.isSuccess
+        if (!written) return false
+        // The receipt cannot answer this one: Simkl reports an episode that is already in the history
+        // as `not_found` even when it opened a rewatch session for it, which reads as a failure for a
+        // write that landed. The sessions of the account are the honest answer, and storing the runs
+        // they make is also what puts the card in Continue Watching without a manual sync.
+        val sessions = runCatching { remote.fetchRewatchSessions() }
+            .onFailure { error ->
+                log.w { "Could not read the rewatch sessions back: ${error.message}" }
+            }
+            .getOrNull()
+            ?: return true
+        SimklSyncRepository.adoptRewatchSessions(sessions)
+        return sessions.holdsRewatchEpisode(media)
     }
 
     private fun isActiveProfile(profileId: Int): Boolean = ProfileRepository.activeProfileId == profileId
