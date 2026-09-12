@@ -2,6 +2,7 @@ package com.nuvio.app.features.simkl
 
 import com.nuvio.app.core.time.parseZonedIsoDateTimeToEpochMs
 import com.nuvio.app.features.tracking.RewatchRunPosition
+import com.nuvio.app.features.tracking.TrackingMediaReference
 
 /** Two episodes in a row make a run; one on its own is a rewatch of a random episode. */
 private const val MINIMUM_RUN_EPISODES = 2
@@ -112,6 +113,26 @@ private fun consecutiveChains(episodes: List<RewatchedEpisode>): List<List<Rewat
                     chains
                 }
         }
+
+/**
+ * True when the account's rewatch sessions hold this exact episode.
+ *
+ * A write to `/sync/history` answers `not_found` for an episode that is already in the history, even
+ * when Simkl opened a rewatch session for it, so the write receipt says "nothing was added" for a
+ * rewatch that landed. The sessions are the only honest answer, and they are what Continue Watching
+ * reads as well.
+ */
+internal fun List<SimklLibraryEntry>.holdsRewatchEpisode(media: TrackingMediaReference): Boolean {
+    val episode = media.episode ?: return false
+    val target = media.toSimklMedia()
+    return any { entry ->
+        entry.isRewatch &&
+            entry.media?.matchesTarget(target) == true &&
+            entry.rewatchedEpisodes().any { rewatched ->
+                rewatched.seasonNumber == episode.season && rewatched.episodeNumber == episode.number
+            }
+    }
+}
 
 internal fun SimklMedia.rewatchMatchKeys(contentId: String): List<String> = buildList {
     add(contentId)
