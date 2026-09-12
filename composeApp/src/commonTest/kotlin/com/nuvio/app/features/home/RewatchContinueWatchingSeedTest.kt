@@ -73,6 +73,26 @@ class RewatchContinueWatchingSeedTest {
         assertEquals(2, candidates.single().episodeNumber)
     }
 
+    @Test
+    fun `a seed brings a series into the row when the canonical history has nothing`() {
+        val candidates = buildHomeNextUpSeedCandidates(
+            progressEntries = emptyList(),
+            watchedItems = emptyList<WatchedItem>(),
+            providerOwnsCompletedHistory = true,
+            preferFurthestEpisode = true,
+            nowEpochMs = SEPTEMBER,
+            shouldUseProgressSeed = { _, _ -> true },
+            rewatchContinueWatchingSeeds = listOf(seed(season = 1, episode = 1, at = SEPTEMBER)),
+        )
+
+        assertEquals(1, candidates.size)
+        assertEquals("tt2861424", candidates.single().content.id)
+        assertEquals("series", candidates.single().content.type)
+        assertEquals(1, candidates.single().seasonNumber)
+        assertEquals(1, candidates.single().episodeNumber)
+        assertEquals(SEPTEMBER, candidates.single().markedAtEpochMs)
+    }
+
     private fun candidate(
         id: String,
         season: Int,
