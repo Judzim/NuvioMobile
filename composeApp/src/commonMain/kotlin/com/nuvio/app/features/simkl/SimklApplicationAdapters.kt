@@ -140,8 +140,12 @@ data class SimklProgressUiState(
  * A mark without episode coordinates describes a whole series. Simkl turns that into a show-level
  * entry and answers by marking every episode of the show watched, including episodes the user never
  * opened, which is how a single ill-timed mark wiped a full series. Only films are allowed through
- * without coordinates; a whole-series action still reports its episodes one by one, which carries
- * the same information and cannot touch anything else. Trakt's adapter has always skipped these.
+ * without coordinates; a whole-series action still reports its episodes one by one (`WatchingActions`
+ * marks the series and its released episodes together), which carries the same information and cannot
+ * touch anything else. A mark whose type is `anime` is dropped too: the app cannot tell an anime film
+ * from an anime series without more metadata, and Trakt's adapter drops both for the same reason. That
+ * is the accepted trade, because a mark the user made by hand staying out of the history is cheaper
+ * than a single call stamping a whole series.
  */
 internal fun simklHistoryPushItems(items: Collection<WatchedItem>): List<WatchedItem> =
     items.filterNot(WatchedItem::isWholeSeriesMark)

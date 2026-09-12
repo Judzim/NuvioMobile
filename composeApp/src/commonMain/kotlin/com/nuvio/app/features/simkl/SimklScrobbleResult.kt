@@ -31,10 +31,6 @@ internal enum class SimklRewatchStatus {
     UNKNOWN,
     ;
 
-    /** True when Simkl stored the watch on a rewatch session. */
-    val isRecorded: Boolean
-        get() = this == ACTIVE || this == COMPLETED || this == CLOSED
-
     companion object {
         fun fromWire(value: String?): SimklRewatchStatus? = when (value?.trim()?.lowercase()) {
             null, "" -> null
