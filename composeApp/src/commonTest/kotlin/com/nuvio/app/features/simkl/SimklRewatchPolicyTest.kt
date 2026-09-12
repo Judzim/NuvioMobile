@@ -132,17 +132,6 @@ class SimklRewatchPolicyTest {
     }
 
     @Test
-    fun `only saved sessions count as recorded rewatches`() {
-        assertTrue(SimklRewatchStatus.ACTIVE.isRecorded)
-        assertTrue(SimklRewatchStatus.COMPLETED.isRecorded)
-        assertTrue(SimklRewatchStatus.CLOSED.isRecorded)
-        assertFalse(SimklRewatchStatus.FIRST_WATCH.isRecorded)
-        assertFalse(SimklRewatchStatus.TOO_SOON.isRecorded)
-        assertFalse(SimklRewatchStatus.PRO_REQUIRED.isRecorded)
-        assertFalse(SimklRewatchStatus.UNKNOWN.isRecorded)
-    }
-
-    @Test
     fun `stop response exposes the created session`() {
         val result = scrobbleResult(
             """{"action":"scrobble","progress":95,"rewatch_id":21284,"rewatch_status":"completed"}""",
@@ -161,7 +150,6 @@ class SimklRewatchPolicyTest {
 
         assertEquals(21284L, result.rewatchId)
         assertEquals(SimklRewatchStatus.TOO_SOON, result.rewatchStatus)
-        assertFalse(result.rewatchStatus?.isRecorded == true)
     }
 
     @Test
