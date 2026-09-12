@@ -1,15 +1,15 @@
 package com.nuvio.app.features.home
 
-import com.nuvio.app.features.tracking.RewatchContinueWatchingSeed
+import com.nuvio.app.features.tracking.RewatchRunPosition
 import com.nuvio.app.features.watched.WatchedItem
 import com.nuvio.app.features.watching.domain.WatchingContentRef
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class RewatchContinueWatchingSeedTest {
+class HomeRewatchRunPositionsTest {
     @Test
-    fun `a fresh seed moves the series onto the rewatch run`() {
+    fun `a fresh run moves the series onto the run`() {
         val candidates = buildHomeNextUpSeedCandidates(
             progressEntries = listOf(canonicalEntry(season = 9, episode = 10, at = JULY)),
             watchedItems = emptyList<WatchedItem>(),
@@ -17,7 +17,7 @@ class RewatchContinueWatchingSeedTest {
             preferFurthestEpisode = true,
             nowEpochMs = JULY,
             shouldUseProgressSeed = { _, _ -> true },
-            rewatchContinueWatchingSeeds = listOf(seed(season = 1, episode = 1, at = SEPTEMBER)),
+            simklRewatchRuns = listOf(run(season = 1, episode = 1, at = SEPTEMBER)),
         )
 
         assertEquals(1, candidates.size)
@@ -28,7 +28,7 @@ class RewatchContinueWatchingSeedTest {
     }
 
     @Test
-    fun `an older canonical position wins over a stale seed`() {
+    fun `an older canonical position wins over a stale run`() {
         val candidates = buildHomeNextUpSeedCandidates(
             progressEntries = listOf(canonicalEntry(season = 9, episode = 10, at = OCTOBER)),
             watchedItems = emptyList<WatchedItem>(),
@@ -36,7 +36,7 @@ class RewatchContinueWatchingSeedTest {
             preferFurthestEpisode = true,
             nowEpochMs = OCTOBER,
             shouldUseProgressSeed = { _, _ -> true },
-            rewatchContinueWatchingSeeds = listOf(seed(season = 1, episode = 1, at = SEPTEMBER)),
+            simklRewatchRuns = listOf(run(season = 1, episode = 1, at = SEPTEMBER)),
         )
 
         assertEquals(9, candidates.single().seasonNumber)
@@ -45,7 +45,7 @@ class RewatchContinueWatchingSeedTest {
     }
 
     @Test
-    fun `a seed for another series leaves this one alone`() {
+    fun `a run for another series leaves this one alone`() {
         val candidates = buildHomeNextUpSeedCandidates(
             progressEntries = listOf(canonicalEntry(season = 9, episode = 10, at = JULY)),
             watchedItems = emptyList<WatchedItem>(),
@@ -53,8 +53,8 @@ class RewatchContinueWatchingSeedTest {
             preferFurthestEpisode = true,
             nowEpochMs = JULY,
             shouldUseProgressSeed = { _, _ -> true },
-            rewatchContinueWatchingSeeds = listOf(
-                seed(season = 1, episode = 1, at = SEPTEMBER, contentId = "tt0903747", keys = listOf("imdb:tt0903747")),
+            simklRewatchRuns = listOf(
+                run(season = 1, episode = 1, at = SEPTEMBER, contentId = "tt0903747", keys = listOf("imdb:tt0903747")),
             ),
         )
 
@@ -63,7 +63,7 @@ class RewatchContinueWatchingSeedTest {
         assertEquals(10, untouched.episodeNumber)
         assertEquals(JULY, untouched.markedAtEpochMs)
 
-        // The other series has no canonical history here, so the seed is the only reason it shows.
+        // The other series has no canonical history here, so the run is the only reason it shows.
         val followed = candidates.single { candidate -> candidate.content.id == "tt0903747" }
         assertEquals(1, followed.seasonNumber)
         assertEquals(1, followed.episodeNumber)
@@ -71,10 +71,10 @@ class RewatchContinueWatchingSeedTest {
     }
 
     @Test
-    fun `seeds are matched through any id form of the series`() {
-        val candidates = applyRewatchContinueWatchingSeeds(
+    fun `runs are matched through any id form of the series`() {
+        val candidates = applyRewatchRunPositions(
             candidates = listOf(candidate(id = "imdb:tt2861424", season = 9, episode = 10, at = JULY)),
-            seeds = listOf(seed(season = 1, episode = 2, at = SEPTEMBER, contentId = "tt2861424")),
+            runs = listOf(run(season = 1, episode = 2, at = SEPTEMBER, contentId = "tt2861424")),
         )
 
         assertEquals(1, candidates.single().seasonNumber)
@@ -82,7 +82,7 @@ class RewatchContinueWatchingSeedTest {
     }
 
     @Test
-    fun `a seed brings a series into the row when the canonical history has nothing`() {
+    fun `a run brings a series into the row when the canonical history has nothing`() {
         val candidates = buildHomeNextUpSeedCandidates(
             progressEntries = emptyList(),
             watchedItems = emptyList<WatchedItem>(),
@@ -90,7 +90,7 @@ class RewatchContinueWatchingSeedTest {
             preferFurthestEpisode = true,
             nowEpochMs = SEPTEMBER,
             shouldUseProgressSeed = { _, _ -> true },
-            rewatchContinueWatchingSeeds = listOf(seed(season = 1, episode = 1, at = SEPTEMBER)),
+            simklRewatchRuns = listOf(run(season = 1, episode = 1, at = SEPTEMBER)),
         )
 
         assertEquals(1, candidates.size)
@@ -113,13 +113,13 @@ class RewatchContinueWatchingSeedTest {
         markedAtEpochMs = at,
     )
 
-    private fun seed(
+    private fun run(
         season: Int,
         episode: Int,
         at: Long,
         contentId: String = "tt2861424",
         keys: List<String> = listOf("imdb:tt2861424", "tmdb:60625"),
-    ): RewatchContinueWatchingSeed = RewatchContinueWatchingSeed(
+    ): RewatchRunPosition = RewatchRunPosition(
         contentId = contentId,
         matchKeys = keys,
         seasonNumber = season,

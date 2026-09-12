@@ -3,7 +3,6 @@ package com.nuvio.app.features.watchprogress
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.cloudLibraryProviderPosterUrl
 import com.nuvio.app.features.details.MetaVideo
-import com.nuvio.app.features.tracking.RewatchContinueWatchingSeed
 import com.nuvio.app.features.tracking.TrackingAttributedItem
 import com.nuvio.app.features.tracking.WatchProgressSource
 import com.nuvio.app.features.watching.domain.WatchingContentRef
@@ -237,11 +236,6 @@ data class ContinueWatchingPreferencesUiState(
     val dismissedNextUpKeys: Set<String> = emptySet(),
     val showResumePromptOnLaunch: Boolean = true,
     val sortMode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT,
-    /**
-     * Series the user asked to keep in Continue Watching while re-watching them, keyed by content id.
-     * See [com.nuvio.app.features.tracking.RewatchContinueWatchingSeed].
-     */
-    val rewatchContinueWatchingSeeds: Map<String, RewatchContinueWatchingSeed> = emptyMap(),
 )
 
 internal fun nextUpDismissKey(
