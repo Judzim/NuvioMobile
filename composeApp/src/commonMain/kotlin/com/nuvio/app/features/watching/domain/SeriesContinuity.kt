@@ -204,6 +204,7 @@ fun decideSeriesPrimaryAction(
         content.actionForEpisode(
             episode = episode,
             label = watchAgainLabel(episode.seasonNumber, episode.episodeNumber),
+            isWatchAgain = true,
         )
     }
 }
@@ -211,6 +212,7 @@ fun decideSeriesPrimaryAction(
 private fun WatchingContentRef.actionForEpisode(
     episode: WatchingReleasedEpisode,
     label: String,
+    isWatchAgain: Boolean = false,
 ): WatchingSeriesPrimaryAction =
     WatchingSeriesPrimaryAction(
         label = label,
@@ -225,6 +227,7 @@ private fun WatchingContentRef.actionForEpisode(
         episodeTitle = episode.title,
         episodeThumbnail = episode.thumbnail,
         resumePositionMs = null,
+        isWatchAgain = isWatchAgain,
     )
 
 /** The first episode the catalogue can actually play, used when a series starts from scratch. */

@@ -2,8 +2,10 @@ package com.nuvio.app.features.watching.domain
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SeriesContinuityTest {
     private val show = WatchingContentRef(type = "series", id = "show")
@@ -377,6 +379,7 @@ class SeriesContinuityTest {
         assertEquals(1, action.episodeNumber)
         assertEquals("show:1:1", action.videoId)
         assertNull(action.resumePositionMs)
+        assertTrue(action.isWatchAgain)
     }
 
     @Test
@@ -444,6 +447,7 @@ class SeriesContinuityTest {
         assertNotNull(action)
         assertEquals("Next Up • S1E2", action.label)
         assertEquals("show:1:2", action.videoId)
+        assertFalse(action.isWatchAgain)
     }
 
     @Test
