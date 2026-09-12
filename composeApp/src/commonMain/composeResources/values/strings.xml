@@ -1293,6 +1293,9 @@
     <string name="settings_tracking_rewatch_manual_description">Ask after every finished playback of something you already watched, and record it only when you confirm.</string>
     <string name="settings_tracking_rewatch_automatic">Automatic</string>
     <string name="settings_tracking_rewatch_automatic_description">Every finished playback of an already watched episode or movie is recorded as a rewatch.</string>
+    <string name="settings_tracking_completion_title">A playback counts as finished at</string>
+    <string name="settings_tracking_completion_subtitle">Nuvio reports a finished playback to Simkl at this point. Simkl itself marks titles watched at 80%, so stopping below your value is sent as a pause instead of a finished watch.</string>
+    <string name="settings_tracking_completion_value">%1$d%%</string>
     <string name="settings_tracking_rewatch_pro_title">Rewatch tracking requires Simkl Pro</string>
     <string name="settings_tracking_rewatch_pro_description">Simkl records rewatches only for Pro or VIP accounts. Sessions already on your Simkl account stay there if your plan changes.</string>
     <string name="settings_tracking_rewatch_pro_upgrade">Upgrade</string>
