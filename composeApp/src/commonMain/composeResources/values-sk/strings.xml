@@ -1435,6 +1435,8 @@
     <string name="generic_addon">Doplnok</string>
     <string name="action_saved">Uložené</string>
     <string name="action_play_episode">Prehrať %1$s</string>
+    <string name="action_watch_again">Pozrieť znova</string>
+    <string name="action_watch_again_episode">Pozrieť znova %1$s</string>
     <string name="action_resume_episode">Pokračovať v %1$s</string>
     <string name="collections_import_error_empty_json">JSON je prázdny.</string>
     <string name="collections_import_error_collection_blank_id">Kolekcia %1$d má prázdne ID.</string>
