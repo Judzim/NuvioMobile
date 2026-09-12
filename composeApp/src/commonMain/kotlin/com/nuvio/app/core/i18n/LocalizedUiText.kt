@@ -6,6 +6,8 @@ import nuvio.composeapp.generated.resources.action_play
 import nuvio.composeapp.generated.resources.action_play_episode
 import nuvio.composeapp.generated.resources.action_resume
 import nuvio.composeapp.generated.resources.action_resume_episode
+import nuvio.composeapp.generated.resources.action_watch_again
+import nuvio.composeapp.generated.resources.action_watch_again_episode
 import nuvio.composeapp.generated.resources.compose_player_episode_code_episode_only
 import nuvio.composeapp.generated.resources.compose_player_episode_code_full
 import nuvio.composeapp.generated.resources.compose_player_no_subtitle_lines_found
