@@ -1,5 +1,6 @@
 package com.nuvio.app.features.watchprogress
 
+import com.nuvio.app.features.tracking.RewatchContinueWatchingSeed
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +25,8 @@ private data class StoredContinueWatchingPreferences(
     val showResumePromptOnLaunch: Boolean = true,
     @SerialName("sort_mode")
     val sortMode: ContinueWatchingSortMode = ContinueWatchingSortMode.DEFAULT,
+    @SerialName("rewatch_continue_watching_seeds")
+    val rewatchContinueWatchingSeeds: Map<String, RewatchContinueWatchingSeed> = emptyMap(),
 )
 
 object ContinueWatchingPreferencesRepository {
@@ -100,6 +103,7 @@ object ContinueWatchingPreferencesRepository {
                 dismissedNextUpKeys = stored.dismissedNextUpKeys,
                 showResumePromptOnLaunch = stored.showResumePromptOnLaunch,
                 sortMode = stored.sortMode,
+                rewatchContinueWatchingSeeds = stored.rewatchContinueWatchingSeeds,
             )
         } else {
             ContinueWatchingPreferencesUiState()
@@ -189,8 +193,49 @@ object ContinueWatchingPreferencesRepository {
                     dismissedNextUpKeys = _uiState.value.dismissedNextUpKeys,
                     showResumePromptOnLaunch = _uiState.value.showResumePromptOnLaunch,
                     sortMode = _uiState.value.sortMode,
+                    rewatchContinueWatchingSeeds = _uiState.value.rewatchContinueWatchingSeeds,
                 ),
             ),
         )
+    }
+
+    /**
+     * Keeps a re-watched series in Continue Watching: its next-up card follows the rewatch run
+     * instead of the canonical watch position until the seed is cleared or the canonical position
+     * moves past it.
+     */
+    fun setRewatchContinueWatchingSeed(seed: RewatchContinueWatchingSeed) {
+        ensureLoaded()
+        val key = seed.contentId.trim().lowercase()
+        if (key.isEmpty()) return
+        val current = _uiState.value.rewatchContinueWatchingSeeds
+        _uiState.value = _uiState.value.copy(
+            rewatchContinueWatchingSeeds = current + (key to seed.copy(contentId = seed.contentId.trim())),
+        )
+        persist()
+    }
+
+    /** Drops the seed of the series behind [contentId], matching any of the ids the app knows it by. */
+    fun clearRewatchContinueWatchingSeedForContent(contentId: String?) {
+        ensureLoaded()
+        val key = contentId?.trim().orEmpty()
+        if (key.isEmpty()) return
+        val current = _uiState.value.rewatchContinueWatchingSeeds
+        val filtered = current.filterValues { seed -> !seed.matches(key) }
+        if (filtered.size == current.size) return
+        _uiState.value = _uiState.value.copy(rewatchContinueWatchingSeeds = filtered)
+        persist()
+    }
+
+    fun clearRewatchContinueWatchingSeeds() {
+        ensureLoaded()
+        if (_uiState.value.rewatchContinueWatchingSeeds.isEmpty()) return
+        _uiState.value = _uiState.value.copy(rewatchContinueWatchingSeeds = emptyMap())
+        persist()
+    }
+
+    fun rewatchContinueWatchingSeedFor(contentId: String?): RewatchContinueWatchingSeed? {
+        ensureLoaded()
+        return _uiState.value.rewatchContinueWatchingSeeds.values.firstOrNull { seed -> seed.matches(contentId) }
     }
 }
