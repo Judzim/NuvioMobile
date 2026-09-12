@@ -1340,8 +1340,8 @@ internal fun applyRewatchContinueWatchingSeeds(
     candidates: List<CompletedSeriesCandidate>,
     seeds: List<RewatchContinueWatchingSeed>,
 ): List<CompletedSeriesCandidate> {
-    if (candidates.isEmpty() || seeds.isEmpty()) return candidates
-    return candidates.map { candidate ->
+    if (seeds.isEmpty()) return candidates
+    val withRunPositions = candidates.map { candidate ->
         val seed = seeds
             .filter { seed -> seed.matches(candidate.content.id) }
             .maxByOrNull(RewatchContinueWatchingSeed::markedAtEpochMs)
@@ -1356,7 +1356,31 @@ internal fun applyRewatchContinueWatchingSeeds(
             markedAtEpochMs = seed.markedAtEpochMs,
         )
     }
+    // A rewatch the user kept can be the only reason its series belongs in the row: with a tracking
+    // provider owning the completed history the app holds no local episode entry for that series, so
+    // there is no canonical candidate to move. Build one from the seed instead of dropping the
+    // answer the user just gave.
+    val added = seeds
+        .filterNot { seed -> withRunPositions.any { candidate -> seed.matches(candidate.content.id) } }
+        .distinctBy(RewatchContinueWatchingSeed::contentId)
+        .map { seed ->
+            CompletedSeriesCandidate(
+                content = WatchingContentRef(type = SERIES_CONTENT_TYPE, id = seed.contentId),
+                seasonNumber = seed.seasonNumber,
+                episodeNumber = seed.episodeNumber,
+                markedAtEpochMs = seed.markedAtEpochMs,
+            )
+        }
+    if (added.isEmpty()) return withRunPositions
+    return (withRunPositions + added).sortedWith(
+        compareByDescending<CompletedSeriesCandidate> { candidate -> candidate.markedAtEpochMs }
+            .thenByDescending { candidate -> candidate.seasonNumber }
+            .thenByDescending { candidate -> candidate.episodeNumber },
+    )
 }
+
+/** The content type the catalogue uses for series, which is what the next-up resolver fetches by. */
+private const val SERIES_CONTENT_TYPE = "series"
 
 internal fun filterNextUpItemsByCurrentSeeds(
     nextUpItemsBySeries: Map<String, Pair<Long, ContinueWatchingItem>>,
