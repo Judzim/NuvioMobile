@@ -104,6 +104,15 @@ jobs:
           PY
           echo "gradle exit code was ${gradle_status}"
 
+      - name: Give the fork build its own package
+        run: |
+          # The fork installs next to the official app, so it cannot use the same package. This is
+          # done here rather than in the sources to keep the change set upstream clean.
+          sed -i 's|applicationId = "com.nuvio.app"|applicationId = "com.judzim.nuvio"|' androidApp/build.gradle.kts
+          sed -i 's|<string name="app_name">Nuvio</string>|<string name="app_name">Nuvio Judzim</string>|' composeApp/src/androidMain/res/values/strings.xml
+          grep -n 'applicationId = ' androidApp/build.gradle.kts
+          grep -n 'app_name' composeApp/src/androidMain/res/values/strings.xml
+
       - name: Assemble release APK
         run: |
           ./gradlew :androidApp:assemblePlaystoreRelease --stacktrace \
