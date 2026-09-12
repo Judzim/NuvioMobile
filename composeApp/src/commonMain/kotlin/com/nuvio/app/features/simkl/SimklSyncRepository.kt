@@ -5,6 +5,7 @@ import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.tracking.TrackingProfileStore
 import com.nuvio.app.features.tracking.TrackingProviderId
 import com.nuvio.app.features.tracking.TrackingProviderRegistry
+import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tracking.TrackingRefreshIntent
 import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.CancellationException
@@ -233,6 +234,39 @@ object SimklSyncRepository : TrackingProfileStore {
             if (generation == profileGeneration && profileId == ProfileRepository.activeProfileId) {
                 _state.value = current.copy(snapshot = snapshot)
                 SimklWatchDiagnostics.logSnapshot(stage = "mutation-commit", snapshot = snapshot)
+            }
+        }
+    }
+
+    /**
+     * Stores the runs the account's rewatch sessions make, so a rewatch the user just confirmed shows
+     * up in Continue Watching at once instead of after the next sync. The sessions come from the
+     * caller, which read them to answer whether the write landed.
+     */
+    internal suspend fun adoptRewatchSessions(sessions: List<SimklLibraryEntry>) {
+        val runs = runCatching {
+            deriveSimklRewatchRuns(
+                entries = sessions,
+                animeIdPreference = TrackingSettingsRepository.uiState.value.simklAnimeIdPreference,
+            )
+        }.getOrElse { error ->
+            log.w { "Could not read the runs out of the rewatch sessions: ${error.message}" }
+            return
+        }
+        ensureLoaded()
+        val generation = profileGeneration
+        val profileId = ProfileRepository.activeProfileId
+        snapshotMutex.withLock {
+            if (generation != profileGeneration || profileId != ProfileRepository.activeProfileId) {
+                return@withLock
+            }
+            val current = _state.value
+            if (current.snapshot.rewatchRuns == runs) return@withLock
+            val snapshot = current.snapshot.copy(rewatchRuns = runs)
+            SimklSyncStorage.savePayload(json.encodeToString(snapshot))
+            if (generation == profileGeneration && profileId == ProfileRepository.activeProfileId) {
+                _state.value = current.copy(snapshot = snapshot)
+                SimklWatchDiagnostics.logSnapshot(stage = "rewatch-sessions", snapshot = snapshot)
             }
         }
     }

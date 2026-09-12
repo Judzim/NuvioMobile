@@ -2,6 +2,10 @@ package com.nuvio.app.features.simkl
 
 import com.nuvio.app.core.time.parseZonedIsoDateTimeToEpochMs
 import com.nuvio.app.features.tracking.RewatchRunPosition
+import com.nuvio.app.features.tracking.TrackingEpisode
+import com.nuvio.app.features.tracking.TrackingExternalIds
+import com.nuvio.app.features.tracking.TrackingMediaKind
+import com.nuvio.app.features.tracking.TrackingMediaReference
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,6 +84,53 @@ class SimklRewatchRunsTest {
         assertFalse(run.matches("tt0903747"))
         assertFalse(run.matches(null))
     }
+
+    @Test
+    fun `the episode a confirmed rewatch landed on is found in the sessions`() {
+        val sessions = listOf(session(1 to "2026-09-01T20:00:00Z", 2 to "2026-09-02T20:00:00Z"))
+
+        assertTrue(sessions.holdsRewatchEpisode(reference(episode = 1)))
+        assertTrue(sessions.holdsRewatchEpisode(reference(episode = 2)))
+    }
+
+    @Test
+    fun `a single rewatched episode still answers for itself`() {
+        val sessions = listOf(session(4 to "2026-09-02T20:00:00Z"))
+
+        assertTrue(sessions.holdsRewatchEpisode(reference(episode = 4)))
+    }
+
+    @Test
+    fun `an episode the sessions do not hold is not found`() {
+        val sessions = listOf(session(1 to "2026-09-01T20:00:00Z", 2 to "2026-09-02T20:00:00Z"))
+
+        assertFalse(sessions.holdsRewatchEpisode(reference(episode = 5)))
+    }
+
+    @Test
+    fun `the sessions of another series do not answer for this one`() {
+        val sessions = listOf(session(1 to "2026-09-01T20:00:00Z", 2 to "2026-09-02T20:00:00Z"))
+
+        assertFalse(sessions.holdsRewatchEpisode(reference(episode = 1, imdb = "tt0903747", simkl = null)))
+    }
+
+    @Test
+    fun `the canonical row does not answer for a rewatch`() {
+        val sessions = listOf(session(1 to "2026-09-01T20:00:00Z", isRewatch = false))
+
+        assertFalse(sessions.holdsRewatchEpisode(reference(episode = 1)))
+    }
+
+    private fun reference(
+        episode: Int,
+        imdb: String? = "tt2861424",
+        simkl: Long? = 12345L,
+    ): TrackingMediaReference = TrackingMediaReference(
+        kind = TrackingMediaKind.SHOW,
+        title = "Rick and Morty",
+        ids = TrackingExternalIds(imdb = imdb, simkl = simkl),
+        episode = TrackingEpisode(season = 1, number = episode),
+    )
 
     private fun runs(vararg rows: SimklLibraryEntry): List<RewatchRunPosition> =
         deriveSimklRewatchRuns(
