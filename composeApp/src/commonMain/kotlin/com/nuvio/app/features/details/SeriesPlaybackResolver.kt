@@ -138,6 +138,8 @@ internal data class SeriesPrimaryAction(
     val episodeTitle: String?,
     val episodeThumbnail: String?,
     val resumePositionMs: Long?,
+    /** Restarting a finished series; Continue Watching ignores these instead of offering them. */
+    val isWatchAgain: Boolean = false,
 )
 
 internal fun MetaDetails.seriesPrimaryAction(
@@ -276,6 +278,7 @@ private fun WatchingSeriesPrimaryAction.toLegacySeriesPrimaryAction(): SeriesPri
         episodeTitle = episodeTitle,
         episodeThumbnail = episodeThumbnail,
         resumePositionMs = resumePositionMs,
+        isWatchAgain = isWatchAgain,
     )
 
 private fun WatchingCompletedEpisode.toLegacyCompletedEpisode(): CompletedSeriesEpisode =
