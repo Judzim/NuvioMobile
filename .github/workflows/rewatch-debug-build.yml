@@ -44,6 +44,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Decode the keystore so every test APK keeps the same signature
+        run: printf '%s' "${{ secrets.NUVIO_KEYSTORE_B64 }}" | base64 -d > nuvio-test.jks && ls -la nuvio-test.jks
+
       - name: Write runtime properties
         run: |
           printf '%s\n' \
@@ -102,7 +105,12 @@ jobs:
           echo "gradle exit code was ${gradle_status}"
 
       - name: Assemble debug APK
-        run: ./gradlew :androidApp:assemblePlaystoreDebug --stacktrace
+        run: |
+          ./gradlew :androidApp:assemblePlaystoreDebug --stacktrace \
+            -Pandroid.injected.signing.store.file="$PWD/nuvio-test.jks" \
+            -Pandroid.injected.signing.store.password="${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.NUVIO_RELEASE_KEY_PASSWORD }}"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
