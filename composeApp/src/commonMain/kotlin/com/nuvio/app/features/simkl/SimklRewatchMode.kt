@@ -1,6 +1,7 @@
 package com.nuvio.app.features.simkl
 
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
+import com.nuvio.app.features.tracking.TrackingSettingsRepository
 
 /**
  * How Nuvio records rewatches on Simkl.
@@ -43,6 +44,16 @@ internal const val SIMKL_WATCHED_THRESHOLD_DEFAULT_PERCENT = 80
 
 internal val SimklWatchedThresholdRange: IntRange =
     SIMKL_WATCHED_THRESHOLD_MIN_PERCENT..SIMKL_WATCHED_THRESHOLD_MAX_PERCENT
+
+/**
+ * Where a playback counts as finished, as the user set it.
+ *
+ * Read in one place so the reporting side (what Nuvio tells Simkl) and the reading side (what the app
+ * shows for the account) cannot drift apart: a playback paused below the value stays in progress
+ * everywhere instead of being reported as a pause and shown as a finished watch.
+ */
+internal val simklWatchedThresholdPercent: Double
+    get() = TrackingSettingsRepository.uiState.value.simklWatchedThresholdPercent.toDouble()
 
 internal fun coerceSimklWatchedThresholdPercent(percent: Int): Int = percent.coerceIn(
     minimumValue = SIMKL_WATCHED_THRESHOLD_MIN_PERCENT,

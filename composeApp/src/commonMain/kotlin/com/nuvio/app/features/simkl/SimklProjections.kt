@@ -163,9 +163,16 @@ internal fun SimklSyncSnapshot.movieAlternateWatchedKeys(): Set<String> {
     return extraKeys
 }
 
-internal fun SimklSyncSnapshot.toSimklProgressEntries(): List<WatchProgressEntry> =
+internal fun SimklSyncSnapshot.toSimklProgressEntries(
+    completionThresholdPercent: Double = simklWatchedThresholdPercent,
+): List<WatchProgressEntry> =
     playback
-        .mapNotNull { session -> session.toWatchProgressEntry(entries) }
+        .mapNotNull { session ->
+            session.toWatchProgressEntry(
+                libraryEntries = entries,
+                completionThresholdPercent = completionThresholdPercent,
+            )
+        }
         .groupBy(WatchProgressEntry::progressKey)
         .mapNotNull { (_, candidates) -> candidates.maxByOrNull(WatchProgressEntry::lastUpdatedEpochMs) }
         .sortedByDescending(WatchProgressEntry::lastUpdatedEpochMs)
@@ -399,7 +406,8 @@ internal fun parseSimklUtcEpochMs(value: String?): Long? {
 }
 
 internal fun SimklPlaybackSession.toWatchProgressEntry(
-    libraryEntries: List<SimklLibraryEntry> = emptyList()
+    libraryEntries: List<SimklLibraryEntry> = emptyList(),
+    completionThresholdPercent: Double = simklWatchedThresholdPercent,
 ): WatchProgressEntry? {
     val media = media ?: return null
     val parentId = media.canonicalContentId() ?: return null
@@ -453,7 +461,7 @@ internal fun SimklPlaybackSession.toWatchProgressEntry(
         lastPositionMs = positionMs,
         durationMs = durationMs,
         lastUpdatedEpochMs = updatedAt,
-        isCompleted = normalizedProgress >= SIMKL_WATCHED_THRESHOLD_PERCENT,
+        isCompleted = normalizedProgress >= completionThresholdPercent,
         progressPercent = normalizedProgress.toFloat(),
         source = WatchProgressSourceSimklPlayback,
         trackingProviderId = TrackingProviderId.SIMKL.storageId,
@@ -630,5 +638,3 @@ private val SIMKL_UTC_PATTERN = Regex(
     "^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,9}))?Z$",
     RegexOption.IGNORE_CASE,
 )
-
-private const val SIMKL_WATCHED_THRESHOLD_PERCENT = 80.0
