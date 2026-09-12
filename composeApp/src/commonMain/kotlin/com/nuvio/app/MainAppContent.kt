@@ -1246,6 +1246,9 @@ internal fun MainAppContent(
                         item.nextUpSeedEpisodeNumber,
                     ),
                 )
+                // Removing the card also ends the rewatch run in Continue Watching, otherwise the
+                // next confirmed rewatch would bring the same series straight back.
+                ContinueWatchingPreferencesRepository.clearRewatchContinueWatchingSeedForContent(item.parentMetaId)
             } else {
                 WatchProgressRepository.removeProgress(contentId = item.parentMetaId)
             }

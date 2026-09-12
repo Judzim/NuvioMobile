@@ -637,6 +637,7 @@
     <string name="hero_remove_from_library">Remove from library</string>
     <string name="rewatch_prompt_title">Record this viewing as a rewatch in Simkl?</string>
     <string name="rewatch_prompt_confirm">Record</string>
+    <string name="rewatch_prompt_confirm_continue">Record + Continue watching</string>
     <string name="rewatch_prompt_dismiss">No</string>
     <string name="home_view_all">View All</string>
     <string name="play_manually">Play manually</string>
