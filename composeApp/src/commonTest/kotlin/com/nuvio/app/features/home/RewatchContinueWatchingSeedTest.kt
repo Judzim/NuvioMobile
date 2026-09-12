@@ -58,8 +58,16 @@ class RewatchContinueWatchingSeedTest {
             ),
         )
 
-        assertEquals(9, candidates.single().seasonNumber)
-        assertEquals(10, candidates.single().episodeNumber)
+        val untouched = candidates.single { candidate -> candidate.content.id == "tt2861424" }
+        assertEquals(9, untouched.seasonNumber)
+        assertEquals(10, untouched.episodeNumber)
+        assertEquals(JULY, untouched.markedAtEpochMs)
+
+        // The other series has no canonical history here, so the seed is the only reason it shows.
+        val followed = candidates.single { candidate -> candidate.content.id == "tt0903747" }
+        assertEquals(1, followed.seasonNumber)
+        assertEquals(1, followed.episodeNumber)
+        assertEquals(SEPTEMBER, followed.markedAtEpochMs)
     }
 
     @Test
