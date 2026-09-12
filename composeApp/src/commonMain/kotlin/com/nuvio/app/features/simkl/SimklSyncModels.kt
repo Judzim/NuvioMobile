@@ -1,5 +1,6 @@
 package com.nuvio.app.features.simkl
 
+import com.nuvio.app.features.tracking.RewatchRunPosition
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -76,7 +77,7 @@ data class SimklLibraryEntry(
     /**
      * Set on the rewatch sidecar row Simkl returns next to the canonical row when a read asks for
      * rewatches. The sidecar keeps its own [seasons] with the episodes of that viewing, while the
-     * canonical row never moves; see [SimklRewatchRun] for what the app does with it.
+     * canonical row never moves; see `deriveSimklRewatchRuns` for what the app does with it.
      */
     @SerialName("is_rewatch") val isRewatch: Boolean = false,
     @SerialName("rewatch_id") val rewatchId: Long? = null,
@@ -192,7 +193,7 @@ data class SimklSyncSnapshot(
      * row shares the show with its canonical row, so mixing them would replace the canonical watch
      * position with rewatch progress.
      */
-    val rewatchRuns: List<SimklRewatchRun> = emptyList(),
+    val rewatchRuns: List<RewatchRunPosition> = emptyList(),
     val lastSyncedAtEpochMs: Long? = null,
     val lastCheckedAtEpochMs: Long? = null,
 )
