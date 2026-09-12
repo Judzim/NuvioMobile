@@ -27,6 +27,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.delay
 import kotlin.math.round
 
 internal class SimklMutationService(
@@ -312,14 +313,37 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         // as `not_found` even when it opened a rewatch session for it, which reads as a failure for a
         // write that landed. The sessions of the account are the honest answer, and storing the runs
         // they make is also what puts the card in Continue Watching without a manual sync.
-        val sessions = runCatching { remote.fetchRewatchSessions() }
-            .onFailure { error ->
-                log.w { "Could not read the rewatch sessions back: ${error.message}" }
-            }
-            .getOrNull()
-            ?: return true
+        val sessions = readRewatchSessions(media) ?: return true
         SimklSyncRepository.adoptRewatchSessions(sessions)
         return sessions.holdsRewatchEpisode(media)
+    }
+
+    /**
+     * Reads the rewatch sessions of the account, waiting for the write to show up on them.
+     *
+     * Returns the last read, or `null` when no read went through at all: an unreachable account is
+     * not a failed write, so the caller keeps the answer it had.
+     */
+    private suspend fun readRewatchSessions(media: TrackingMediaReference): List<SimklLibraryEntry>? {
+        var lastRead: List<SimklLibraryEntry>? = null
+        repeat(SIMKL_REWATCH_SESSION_READ_ATTEMPTS) { attempt ->
+            if (attempt > 0) delay(SIMKL_REWATCH_SESSION_READ_DELAY_MS)
+            val sessions = runCatching { remote.fetchRewatchSessions() }
+                .onFailure { error ->
+                    log.w { "Could not read the rewatch sessions back: ${error.message}" }
+                }
+                .getOrNull() ?: return@repeat
+            lastRead = sessions
+            if (sessions.holdsRewatchEpisode(media)) return sessions
+        }
+        lastRead?.let { sessions ->
+            log.i {
+                "The rewatch sessions do not hold the confirmed episode after " +
+                    "${SIMKL_REWATCH_SESSION_READ_ATTEMPTS} reads: " +
+                    "${sessions.count(SimklLibraryEntry::isRewatch)} session rows"
+            }
+        }
+        return lastRead
     }
 
     private fun isActiveProfile(profileId: Int): Boolean = ProfileRepository.activeProfileId == profileId
