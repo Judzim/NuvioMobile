@@ -1,6 +1,7 @@
 package com.nuvio.app.features.simkl
 
 import co.touchlab.kermit.Logger
+import com.nuvio.app.features.tracking.RewatchRunPosition
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
 
 internal class SimklSyncEngine(
@@ -80,7 +81,7 @@ internal class SimklSyncEngine(
      * A failed read keeps what the previous sync found: losing the network must not empty the
      * Continue Watching cards the user is looking at.
      */
-    private suspend fun readRewatchRuns(current: SimklSyncSnapshot?): List<SimklRewatchRun> =
+    private suspend fun readRewatchRuns(current: SimklSyncSnapshot?): List<RewatchRunPosition> =
         runCatching {
             val sessions = remote.fetchRewatchSessions()
             deriveSimklRewatchRuns(
