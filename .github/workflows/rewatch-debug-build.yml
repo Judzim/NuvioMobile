@@ -104,17 +104,17 @@ jobs:
           PY
           echo "gradle exit code was ${gradle_status}"
 
-      - name: Assemble debug APK
+      - name: Assemble release APK
         run: |
-          ./gradlew :androidApp:assemblePlaystoreDebug --stacktrace \
+          ./gradlew :androidApp:assemblePlaystoreRelease --stacktrace \
             -Pandroid.injected.signing.store.file="$PWD/nuvio-test.jks" \
             -Pandroid.injected.signing.store.password="${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}" \
             -Pandroid.injected.signing.key.password="${{ secrets.NUVIO_RELEASE_KEY_PASSWORD }}"
 
-      - name: Upload debug APK
+      - name: Upload release APK
         uses: actions/upload-artifact@v7
         with:
-          name: rewatch-playstore-debug
-          path: androidApp/build/outputs/apk/playstore/debug/*.apk
+          name: rewatch-playstore-release
+          path: androidApp/build/outputs/apk/playstore/release/*.apk
           if-no-files-found: error

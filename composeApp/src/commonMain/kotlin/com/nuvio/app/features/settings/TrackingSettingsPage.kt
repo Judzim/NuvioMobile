@@ -628,17 +628,17 @@ private fun SimklFeaturesSection(
             onClick = { showAnimeIdPicker = true },
         )
         SettingsGroupDivider(isTablet = isTablet)
+        SimklCompletionThresholdRow(
+            percent = settingsUiState.simklWatchedThresholdPercent,
+            isTablet = isTablet,
+        )
+        SettingsGroupDivider(isTablet = isTablet)
         TrackingPreferenceActionRow(
             title = stringResource(Res.string.settings_tracking_rewatch_title),
             description = stringResource(Res.string.settings_tracking_rewatch_subtitle),
             value = simklRewatchModeLabel(settingsUiState.simklRewatchMode),
             isTablet = isTablet,
             onClick = { showRewatchPicker = true },
-        )
-        SettingsGroupDivider(isTablet = isTablet)
-        SimklCompletionThresholdRow(
-            percent = settingsUiState.simklWatchedThresholdPercent,
-            isTablet = isTablet,
         )
     }
 
@@ -721,7 +721,7 @@ private fun SimklCompletionThresholdRow(
             Text(
                 text = stringResource(
                     Res.string.settings_tracking_completion_value,
-                    sliderValue.roundToInt(),
+                    sliderValue.roundToInt().toString(),
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
