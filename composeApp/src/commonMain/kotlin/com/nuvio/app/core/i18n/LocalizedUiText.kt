@@ -107,6 +107,15 @@ fun localizedUpNextLabel(seasonNumber: Int?, episodeNumber: Int?): String =
         resourceString("Next Up") { getString(Res.string.continue_watching_up_next) }
     }
 
+fun localizedWatchAgainLabel(seasonNumber: Int?, episodeNumber: Int?): String {
+    val episodeCode = localizedSeasonEpisodeCode(seasonNumber, episodeNumber)
+    return if (episodeCode != null) {
+        resourceString("Watch again $episodeCode") { getString(Res.string.action_watch_again_episode, episodeCode) }
+    } else {
+        resourceString("Watch again") { getString(Res.string.action_watch_again) }
+    }
+}
+
 fun localizedMonthName(month: Int): String =
     when (month) {
         1 -> resourceString("January") { getString(Res.string.date_month_january) }

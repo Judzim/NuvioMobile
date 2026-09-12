@@ -353,4 +353,120 @@ class SeriesContinuityTest {
         assertEquals("Next Up • S2E2", action.label)
         assertEquals("show:2:2", action.videoId)
     }
+
+    @Test
+    fun decideSeriesPrimaryAction_offers_the_first_episode_when_everything_is_watched() {
+        val finished = listOf(
+            WatchingReleasedEpisode(videoId = "ep1", seasonNumber = 1, episodeNumber = 1, title = "S1E1", releasedDate = "2026-01-01"),
+            WatchingReleasedEpisode(videoId = "ep2", seasonNumber = 1, episodeNumber = 2, title = "S1E2", releasedDate = "2026-01-08"),
+        )
+        val action = decideSeriesPrimaryAction(
+            content = show,
+            episodes = finished,
+            progressRecords = listOf(
+                WatchingProgressRecord(content = show, videoId = "show:1:1", seasonNumber = 1, episodeNumber = 1, lastUpdatedEpochMs = 100L, isCompleted = true),
+                WatchingProgressRecord(content = show, videoId = "show:1:2", seasonNumber = 1, episodeNumber = 2, lastUpdatedEpochMs = 200L, isCompleted = true),
+            ),
+            watchedRecords = emptyList(),
+            todayIsoDate = "2026-03-30",
+        )
+
+        assertNotNull(action)
+        assertEquals("Watch again S1E1", action.label)
+        assertEquals(1, action.seasonNumber)
+        assertEquals(1, action.episodeNumber)
+        assertEquals("show:1:1", action.videoId)
+        assertNull(action.resumePositionMs)
+    }
+
+    @Test
+    fun decideSeriesPrimaryAction_watch_again_skips_specials() {
+        val finishedWithSpecials = listOf(
+            WatchingReleasedEpisode(videoId = "sp1", seasonNumber = 0, episodeNumber = 1, title = "Special 1", releasedDate = "2026-01-01"),
+            WatchingReleasedEpisode(videoId = "ep1", seasonNumber = 1, episodeNumber = 1, title = "S1E1", releasedDate = "2026-01-08"),
+        )
+        val action = decideSeriesPrimaryAction(
+            content = show,
+            episodes = finishedWithSpecials,
+            progressRecords = listOf(
+                WatchingProgressRecord(content = show, videoId = "show:1:1", seasonNumber = 1, episodeNumber = 1, lastUpdatedEpochMs = 100L, isCompleted = true),
+            ),
+            watchedRecords = emptyList(),
+            todayIsoDate = "2026-03-30",
+        )
+
+        assertNotNull(action)
+        assertEquals(1, action.seasonNumber)
+        assertEquals(1, action.episodeNumber)
+        assertEquals("show:1:1", action.videoId)
+    }
+
+    @Test
+    fun decideSeriesPrimaryAction_watch_again_waits_for_an_unaired_next_episode() {
+        val withUnairedNext = listOf(
+            WatchingReleasedEpisode(videoId = "ep1", seasonNumber = 1, episodeNumber = 1, title = "S1E1", releasedDate = "2026-01-01"),
+            WatchingReleasedEpisode(videoId = "ep2", seasonNumber = 2, episodeNumber = 1, title = "S2E1", releasedDate = "2026-12-01"),
+        )
+        val action = decideSeriesPrimaryAction(
+            content = show,
+            episodes = withUnairedNext,
+            progressRecords = listOf(
+                WatchingProgressRecord(content = show, videoId = "show:1:1", seasonNumber = 1, episodeNumber = 1, lastUpdatedEpochMs = 100L, isCompleted = true),
+            ),
+            watchedRecords = emptyList(),
+            todayIsoDate = "2026-03-30",
+        )
+
+        assertNotNull(action)
+        assertEquals("Watch again S1E1", action.label)
+        assertEquals("show:1:1", action.videoId)
+    }
+
+    @Test
+    fun decideSeriesPrimaryAction_follows_the_rewatch_run() {
+        val finished = listOf(
+            WatchingReleasedEpisode(videoId = "ep1", seasonNumber = 1, episodeNumber = 1, title = "S1E1", releasedDate = "2026-01-01"),
+            WatchingReleasedEpisode(videoId = "ep2", seasonNumber = 1, episodeNumber = 2, title = "S1E2", releasedDate = "2026-01-08"),
+        )
+        val action = decideSeriesPrimaryAction(
+            content = show,
+            episodes = finished,
+            progressRecords = listOf(
+                WatchingProgressRecord(content = show, videoId = "show:1:1", seasonNumber = 1, episodeNumber = 1, lastUpdatedEpochMs = 100L, isCompleted = true),
+                WatchingProgressRecord(content = show, videoId = "show:1:2", seasonNumber = 1, episodeNumber = 2, lastUpdatedEpochMs = 200L, isCompleted = true),
+            ),
+            watchedRecords = emptyList(),
+            todayIsoDate = "2026-03-30",
+            rewatchSeasonNumber = 1,
+            rewatchEpisodeNumber = 1,
+        )
+
+        assertNotNull(action)
+        assertEquals("Next Up • S1E2", action.label)
+        assertEquals("show:1:2", action.videoId)
+    }
+
+    @Test
+    fun decideSeriesPrimaryAction_rewatch_run_at_the_last_episode_watches_again() {
+        val finished = listOf(
+            WatchingReleasedEpisode(videoId = "ep1", seasonNumber = 1, episodeNumber = 1, title = "S1E1", releasedDate = "2026-01-01"),
+            WatchingReleasedEpisode(videoId = "ep2", seasonNumber = 1, episodeNumber = 2, title = "S1E2", releasedDate = "2026-01-08"),
+        )
+        val action = decideSeriesPrimaryAction(
+            content = show,
+            episodes = finished,
+            progressRecords = emptyList(),
+            watchedRecords = listOf(
+                WatchingWatchedRecord(content = show, seasonNumber = 1, episodeNumber = 1, markedAtEpochMs = 100L),
+                WatchingWatchedRecord(content = show, seasonNumber = 1, episodeNumber = 2, markedAtEpochMs = 200L),
+            ),
+            todayIsoDate = "2026-03-30",
+            rewatchSeasonNumber = 1,
+            rewatchEpisodeNumber = 2,
+        )
+
+        assertNotNull(action)
+        assertEquals("Watch again S1E1", action.label)
+        assertEquals("show:1:1", action.videoId)
+    }
 }
