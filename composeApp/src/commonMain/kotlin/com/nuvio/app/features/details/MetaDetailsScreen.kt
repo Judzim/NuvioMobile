@@ -145,6 +145,7 @@ import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
 import com.nuvio.app.features.watching.application.WatchingActions
 import com.nuvio.app.features.watching.application.WatchingState
+import com.nuvio.app.features.watching.domain.watchAgainLabel
 import com.kmpalette.rememberDominantColorState
 import com.kmpalette.extensions.painter.rememberPainterDominantColorState
 import kotlinx.coroutines.delay
@@ -745,12 +746,27 @@ fun MetaDetailsScreen(
                 )
                 val playText = stringResource(Res.string.action_play)
                 val resumeText = stringResource(Res.string.action_resume)
-                val playButtonLabel = remember(movieProgress, seriesAction, meta.type, hasEpisodes, playText, resumeText) {
+                val watchAgainText = watchAgainLabel(seasonNumber = null, episodeNumber = null)
+                val playButtonLabel = remember(
+                    movieProgress,
+                    seriesAction,
+                    meta.type,
+                    hasEpisodes,
+                    playText,
+                    resumeText,
+                    watchAgainText,
+                    isWatched,
+                ) {
                     when {
                         (meta.type == "series" || hasEpisodes) && seriesAction != null ->
                             seriesAction.label
-                        meta.type != "series" && !hasEpisodes && movieProgress != null ->
-                            resumeText
+                        meta.type != "series" && !hasEpisodes -> movieLikePlayLabel(
+                            hasUnfinishedProgress = movieProgress != null,
+                            isWatched = isWatched,
+                            resumeLabel = resumeText,
+                            watchAgainLabel = watchAgainText,
+                            playLabel = playText,
+                        )
                         else -> playText
                     }
                 }
