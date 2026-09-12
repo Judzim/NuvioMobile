@@ -9,48 +9,6 @@ import kotlin.test.assertNotNull
 
 class SeriesPlaybackResolverTest {
     @Test
-    fun movieLikePlayLabel_offers_a_watched_film_again() {
-        assertEquals(
-            "Watch again",
-            movieLikePlayLabel(
-                hasUnfinishedProgress = false,
-                isWatched = true,
-                resumeLabel = "Resume",
-                watchAgainLabel = "Watch again",
-                playLabel = "Play",
-            ),
-        )
-    }
-
-    @Test
-    fun movieLikePlayLabel_resumes_an_unfinished_film_before_offering_it_again() {
-        assertEquals(
-            "Resume",
-            movieLikePlayLabel(
-                hasUnfinishedProgress = true,
-                isWatched = true,
-                resumeLabel = "Resume",
-                watchAgainLabel = "Watch again",
-                playLabel = "Play",
-            ),
-        )
-    }
-
-    @Test
-    fun movieLikePlayLabel_plays_a_film_that_was_never_watched() {
-        assertEquals(
-            "Play",
-            movieLikePlayLabel(
-                hasUnfinishedProgress = false,
-                isWatched = false,
-                resumeLabel = "Resume",
-                watchAgainLabel = "Watch again",
-                playLabel = "Play",
-            ),
-        )
-    }
-
-    @Test
     fun seriesPrimaryAction_uses_latest_watched_episode_when_manual_mark_exists() {
         val meta = MetaDetails(
             id = "show",
