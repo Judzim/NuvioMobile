@@ -574,13 +574,20 @@ fun MetaDetailsScreen(
                 val movieProgress = progressByVideoId[meta.id]
                     ?.takeUnless { it.isCompleted }
                 val cwPrefs by ContinueWatchingPreferencesRepository.uiState.collectAsStateWithLifecycle()
-                val seriesAction = remember(watchProgressUiState.entries, watchedUiState.items, meta, todayIsoDate, cwPrefs.upNextFromFurthestEpisode, watchedUiState.watchedKeys) {
+                // A rewatch the user follows from Continue Watching decides which episode Play
+                // offers, so the button keeps following the run instead of the old watch position.
+                val rewatchRun = remember(cwPrefs.rewatchContinueWatchingSeeds, meta.id) {
+                    cwPrefs.rewatchContinueWatchingSeeds.values.firstOrNull { seed -> seed.matches(meta.id) }
+                }
+                val seriesAction = remember(watchProgressUiState.entries, watchedUiState.items, meta, todayIsoDate, cwPrefs.upNextFromFurthestEpisode, watchedUiState.watchedKeys, rewatchRun) {
                     meta.seriesPrimaryAction(
                         entries = watchProgressUiState.entries,
                         watchedItems = watchedUiState.items,
                         todayIsoDate = todayIsoDate,
                         preferFurthestEpisode = cwPrefs.upNextFromFurthestEpisode,
                         watchedKeys = watchedUiState.watchedKeys,
+                        rewatchSeasonNumber = rewatchRun?.seasonNumber,
+                        rewatchEpisodeNumber = rewatchRun?.episodeNumber,
                     )
                 }
                 val seriesActionVideo = remember(seriesAction, meta.id, meta.videos) {
