@@ -15,9 +15,16 @@ internal class SimklSyncEngine(
 
         val activities = remote.fetchActivities()
         if (activities.all == current.watermark) {
+            // Rewatch runs are read off the account, and the account only reports a new session once its
+            // activity counter moves. An install that has never read them (a fresh upgrade) or whose read
+            // failed would therefore show no card until the user watches something or syncs by hand, so
+            // it asks once even with nothing new to sync.
+            val runs = if (current.rewatchRunsFetched) null else readRewatchRuns()
             return current.copy(
                 activities = activities,
                 lastCheckedAtEpochMs = nowEpochMs(),
+                rewatchRuns = runs ?: current.rewatchRuns,
+                rewatchRunsFetched = current.rewatchRunsFetched || runs != null,
             )
         }
         if (current.watermark == null) return initialSync()
@@ -39,13 +46,15 @@ internal class SimklSyncEngine(
             current.playback
         }
 
+        val runs = readRewatchRuns()
         val now = nowEpochMs()
         return current.copy(
             watermark = activities.all,
             activities = activities,
             entries = entries,
             playback = playback,
-            rewatchRuns = readRewatchRuns(current),
+            rewatchRuns = runs ?: current.rewatchRuns,
+            rewatchRunsFetched = current.rewatchRunsFetched || runs != null,
             lastSyncedAtEpochMs = now,
             lastCheckedAtEpochMs = now,
         ).reconcileWatchedPlayback()
@@ -62,6 +71,7 @@ internal class SimklSyncEngine(
         }
         val playback = remote.fetchPlayback()
         val activities = remote.fetchActivities()
+        val runs = readRewatchRuns()
         val now = nowEpochMs()
         return SimklSyncSnapshot(
             isInitialized = true,
@@ -69,7 +79,8 @@ internal class SimklSyncEngine(
             activities = activities,
             entries = entries.distinctBy(SimklLibraryEntry::stableKey),
             playback = playback,
-            rewatchRuns = readRewatchRuns(current = null),
+            rewatchRuns = runs.orEmpty(),
+            rewatchRunsFetched = runs != null,
             lastSyncedAtEpochMs = now,
             lastCheckedAtEpochMs = now,
         ).reconcileWatchedPlayback()
@@ -78,10 +89,11 @@ internal class SimklSyncEngine(
     /**
      * Reads the rewatch sessions of the account and turns them into runs.
      *
-     * A failed read keeps what the previous sync found: losing the network must not empty the
-     * Continue Watching cards the user is looking at.
+     * Returns null when the read failed, so the caller keeps what the previous sync found (losing the
+     * network must not empty the Continue Watching cards the user is looking at) and knows that the
+     * sessions still have not been read.
      */
-    private suspend fun readRewatchRuns(current: SimklSyncSnapshot?): List<RewatchRunPosition> =
+    private suspend fun readRewatchRuns(): List<RewatchRunPosition>? =
         runCatching {
             val sessions = remote.fetchRewatchSessions()
             deriveSimklRewatchRuns(
@@ -90,7 +102,7 @@ internal class SimklSyncEngine(
             )
         }.getOrElse { error ->
             log.w { "Simkl rewatch sessions could not be read: ${error.message}" }
-            current?.rewatchRuns.orEmpty()
+            null
         }
 }
 

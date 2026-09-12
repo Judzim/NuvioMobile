@@ -194,6 +194,16 @@ data class SimklSyncSnapshot(
      * position with rewatch progress.
      */
     val rewatchRuns: List<RewatchRunPosition> = emptyList(),
+
+    /**
+     * Whether the account's rewatch sessions have ever been read into [rewatchRuns].
+     *
+     * The sessions are only reported when their activity counter moves, so a sync that sees nothing new
+     * has no reason to ask for them. An install that has never read them (a fresh upgrade) or whose read
+     * failed asks once anyway, which is the only way the row fills in without the user watching again or
+     * syncing by hand.
+     */
+    val rewatchRunsFetched: Boolean = false,
     val lastSyncedAtEpochMs: Long? = null,
     val lastCheckedAtEpochMs: Long? = null,
 )

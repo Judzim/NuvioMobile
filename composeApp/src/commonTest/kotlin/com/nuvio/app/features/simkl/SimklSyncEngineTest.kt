@@ -79,6 +79,66 @@ class SimklSyncEngineTest {
     }
 
     @Test
+    fun `sessions never read are asked for even when nothing changed`() = runBlocking {
+        val current = SimklSyncSnapshot(
+            isInitialized = true,
+            watermark = "v1",
+            activities = activities(all = "v1"),
+            entries = listOf(entry(SimklMediaType.SHOWS, "1")),
+            lastCheckedAtEpochMs = 10L,
+        )
+        val remote = ScriptedRemote(
+            Step.Activities(activities(all = "v1")),
+            Step.RewatchSessions(listOf(rewatchEntry("7", episodes = listOf(1, 2)))),
+        )
+
+        val result = SimklSyncEngine(remote) { 20L }.synchronize(current)
+
+        assertTrue(result.rewatchRunsFetched)
+        assertEquals(1, result.rewatchRuns.size)
+        assertEquals(2, result.rewatchRuns.single().episodeNumber)
+        assertTrue(remote.isExhausted)
+    }
+
+    @Test
+    fun `sessions already in the snapshot are not read again`() = runBlocking {
+        val current = SimklSyncSnapshot(
+            isInitialized = true,
+            watermark = "v1",
+            activities = activities(all = "v1"),
+            entries = listOf(entry(SimklMediaType.SHOWS, "1")),
+            rewatchRunsFetched = true,
+            lastCheckedAtEpochMs = 10L,
+        )
+        val remote = ScriptedRemote(Step.Activities(activities(all = "v1")))
+
+        val result = SimklSyncEngine(remote) { 20L }.synchronize(current)
+
+        assertTrue(result.rewatchRuns.isEmpty())
+        assertTrue(remote.isExhausted)
+    }
+
+    @Test
+    fun `a failed session read keeps the previous runs and asks again next time`() = runBlocking {
+        val current = SimklSyncSnapshot(
+            isInitialized = true,
+            watermark = "v1",
+            activities = activities(all = "v1"),
+            entries = listOf(entry(SimklMediaType.SHOWS, "1")),
+            lastCheckedAtEpochMs = 10L,
+        )
+        val remote = ScriptedRemote(
+            Step.Activities(activities(all = "v1")),
+            Step.Failure(IllegalStateException("offline")),
+        )
+
+        val result = SimklSyncEngine(remote) { 20L }.synchronize(current)
+
+        assertFalse(result.rewatchRunsFetched)
+        assertTrue(result.rewatchRuns.isEmpty())
+    }
+
+    @Test
     fun `playback only activity refreshes playback without all items`() = runBlocking {
         val current = SimklSyncSnapshot(
             isInitialized = true,
@@ -509,6 +569,20 @@ class SimklSyncEngineTest {
             type = "episode",
             episode = SimklPlaybackEpisode(season = 1, number = 5),
             show = media(id),
+        )
+
+        fun rewatchEntry(
+            id: String,
+            episodes: List<Int>,
+            watchedAt: String = "2026-09-12T10:00:00Z",
+        ) = entry(SimklMediaType.SHOWS, id).copy(
+            isRewatch = true,
+            seasons = listOf(
+                SimklSeason(
+                    number = 1,
+                    episodes = episodes.map { number -> SimklEpisode(number = number, watchedAt = watchedAt) },
+                ),
+            ),
         )
 
         fun watchedShowEntry(id: String, watchedAt: String) =
