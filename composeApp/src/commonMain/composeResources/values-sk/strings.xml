@@ -2103,9 +2103,9 @@
     <string name="settings_tracking_rewatch_manual_description">Nuvio sa po každom dokončenom prehratí niečoho, čo ste už pozerali, opýta a zapíše to len po vašom potvrdení.</string>
     <string name="settings_tracking_rewatch_automatic">Automaticky</string>
     <string name="settings_tracking_rewatch_automatic_description">Každé dokončené prehratie už pozretého filmu alebo epizódy sa zaznamená ako opakované pozretie.</string>
-    <string name="settings_tracking_completion_title">Prehratie sa počíta ako dokončené od</string>
-    <string name="settings_tracking_completion_subtitle">Nuvio nahlási dokončené prehratie do Simklu v tomto bode. Simkl sám považuje titul za pozretý od 80 percent, preto sa zastavenie pod tvojou hodnotou pošle ako pauza a nie ako dokončené pozretie.</string>
-    <string name="settings_tracking_completion_value">%1$d %%</string>
+    <string name="settings_tracking_completion_title">Pozreté od</string>
+    <string name="settings_tracking_completion_subtitle">Nuvio nahlási do Simklu prehratie ako dokončené od tejto hodnoty. Pod ňou ostane titul nedokončený.</string>
+    <string name="settings_tracking_completion_value">%1$s %</string>
     <string name="settings_tracking_rewatch_pro_title">Zaznamenávanie opakovaných pozretí vyžaduje Simkl Pro</string>
     <string name="settings_tracking_rewatch_pro_description">Simkl zaznamenáva opakované pozretia len pre účty Pro alebo VIP. Relácie, ktoré už na účte Simkl máte, tam ostanú aj po zmene plánu.</string>
     <string name="settings_tracking_rewatch_pro_upgrade">Prejsť na Pro</string>
