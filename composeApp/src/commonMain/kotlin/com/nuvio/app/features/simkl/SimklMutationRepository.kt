@@ -277,10 +277,10 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
                     ),
                 ),
                 allowRewatch = true,
-            )
+            ).isComplete
         }.onFailure { error ->
             log.w { "Failed to record confirmed Simkl rewatch: ${error.message}" }
-        }.isSuccess
+        }.getOrDefault(false)
     }
 
     private fun isActiveProfile(profileId: Int): Boolean = ProfileRepository.activeProfileId == profileId
