@@ -316,8 +316,8 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
     suspend fun recordConfirmedRewatch(
         prompt: RewatchPrompt,
         includeInContinueWatching: Boolean = false,
-    ) {
-        if (!isActiveProfile(ProfileRepository.activeProfileId)) return
+    ): Boolean {
+        if (!isActiveProfile(ProfileRepository.activeProfileId)) return false
         val recorded = runCatching {
             service.addToHistory(
                 items = listOf(
@@ -331,11 +331,12 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         }.onFailure { error ->
             log.w { "Failed to record confirmed Simkl rewatch: ${error.message}" }
         }.isSuccess
-        if (!recorded) return
+        if (!recorded) return false
         // The series only follows the run when the user picked that answer in the prompt.
-        if (!includeInContinueWatching) return
-        val seed = prompt.continueWatchingSeed ?: return
+        if (!includeInContinueWatching) return true
+        val seed = prompt.continueWatchingSeed ?: return true
         ContinueWatchingPreferencesRepository.setRewatchContinueWatchingSeed(seed)
+        return true
     }
 
     private fun isActiveProfile(profileId: Int): Boolean = ProfileRepository.activeProfileId == profileId
