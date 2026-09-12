@@ -62,6 +62,7 @@ internal fun SimklApiResponse.toSimklScrobbleResult(
     requestedAction: TrackingScrobbleAction,
     event: TrackingScrobbleEvent,
     json: Json,
+    completionThresholdPercent: Double = SIMKL_REWATCH_MIN_PROGRESS_PERCENT,
 ): SimklScrobbleResult {
     val payload = body
         .takeIf(String::isNotBlank)
@@ -80,7 +81,7 @@ internal fun SimklApiResponse.toSimklScrobbleResult(
         isSoftSuccess && status == 409 -> SimklScrobbleOutcome.SCROBBLE
         else -> payload.stringValue("action")
             ?.toSimklScrobbleOutcome()
-            ?: requestedAction.fallbackOutcome(progress)
+            ?: requestedAction.fallbackOutcome(progress, completionThresholdPercent)
     }
     return SimklScrobbleResult(
         outcome = outcome,
@@ -158,12 +159,19 @@ internal fun TrackingMediaKind.toSimklMediaType(): SimklMediaType = when (this) 
     TrackingMediaKind.ANIME -> SimklMediaType.ANIME
 }
 
-private fun TrackingScrobbleAction.fallbackOutcome(progress: Double): SimklScrobbleOutcome =
+private fun TrackingScrobbleAction.fallbackOutcome(
+    progress: Double,
+    completionThresholdPercent: Double,
+): SimklScrobbleOutcome =
     when (this) {
         TrackingScrobbleAction.START -> SimklScrobbleOutcome.START
         TrackingScrobbleAction.PAUSE -> SimklScrobbleOutcome.PAUSE
         TrackingScrobbleAction.STOP -> {
-            if (progress >= 80.0) SimklScrobbleOutcome.SCROBBLE else SimklScrobbleOutcome.PAUSE
+            if (progress >= completionThresholdPercent) {
+                SimklScrobbleOutcome.SCROBBLE
+            } else {
+                SimklScrobbleOutcome.PAUSE
+            }
         }
     }
 
