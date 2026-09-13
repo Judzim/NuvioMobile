@@ -23,6 +23,7 @@ jobs:
   test-and-build:
     name: Unit tests and debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
       SIMKL_APP_NAME: ${{ secrets.SIMKL_APP_NAME }}
@@ -115,7 +116,12 @@ jobs:
 
       - name: Assemble release APK
         run: |
+          # lintVital is a release-only check that takes minutes and has nothing to do with the APK
+          # this build exists for, and it is where the runner gave up once.
           ./gradlew :androidApp:assemblePlaystoreRelease --stacktrace \
+            -x lintVitalPlaystoreRelease \
+            -x lintVitalAnalyzePlaystoreRelease \
+            -x lintVitalReportPlaystoreRelease \
             -Pandroid.injected.signing.store.file="$PWD/nuvio-test.jks" \
             -Pandroid.injected.signing.store.password="${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}" \
