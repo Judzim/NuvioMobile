@@ -27,7 +27,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.round
 
 internal class SimklMutationService(
@@ -288,9 +292,15 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
      * untouched and keeps the viewing as its own session, which is why the write happens after the
      * scrobble instead of on it: nothing can be recorded before the user answers.
      *
-     * Continue Watching is not touched here. Whether the series joins the row is decided by the
-     * account: once two episodes of the run are rewatched, the next sync reads them back and the row
-     * follows, on every device.
+     * Whether the write landed is answered by the write itself. Simkl reports an episode the history
+     * already holds as `not_found`, and it reports one every time the question is asked, because the
+     * prompt only appears for a repeat viewing of something watched more than 48 hours ago on a plan
+     * that allows rewatches. Reading the account back instead would be the better proof, but Simkl
+     * publishes the session a while after accepting the write, so that answer arrives too late to
+     * decide anything.
+     *
+     * Continue Watching is refreshed in the background. Once two episodes of the run are rewatched
+     * the row follows, on every device, and the refresh is what makes it follow without a sync.
      */
     suspend fun recordConfirmedRewatch(prompt: RewatchPrompt): Boolean {
         if (!isActiveProfile(ProfileRepository.activeProfileId)) return false
@@ -309,44 +319,49 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             log.w { "Failed to record confirmed Simkl rewatch: ${error.message}" }
         }.isSuccess
         if (!written) return false
-        // The receipt cannot answer this one: Simkl reports an episode that is already in the history
-        // as `not_found` even when it opened a rewatch session for it, which reads as a failure for a
-        // write that landed. The sessions of the account are the honest answer, and storing the runs
-        // they make is also what puts the card in Continue Watching without a manual sync.
-        val sessions = readRewatchSessions(media) ?: return true
-        SimklSyncRepository.adoptRewatchSessions(sessions)
-        return sessions.holdsRewatchEpisode(media)
+        refreshRewatchSessions(media)
+        return true
     }
 
     /**
-     * Reads the rewatch sessions of the account, waiting for the write to show up on them.
+     * Reads the rewatch sessions back until they carry the episode, then stores the runs they make.
      *
-     * Returns the last read, or `null` when no read went through at all: an unreachable account is
-     * not a failed write, so the caller keeps the answer it had.
+     * Runs in the background, because Simkl can take a while to publish a session and nobody is
+     * waiting for this. The read that sees the episode is also the one that puts the run into
+     * Continue Watching, so a confirmed rewatch reaches the row without a manual sync.
      */
-    private suspend fun readRewatchSessions(media: TrackingMediaReference): List<SimklLibraryEntry>? {
-        var lastRead: List<SimklLibraryEntry>? = null
-        repeat(SIMKL_REWATCH_SESSION_READ_ATTEMPTS) { attempt ->
-            if (attempt > 0) delay(SIMKL_REWATCH_SESSION_READ_DELAY_MS)
-            val sessions = runCatching { remote.fetchRewatchSessions() }
-                .onFailure { error ->
-                    log.w { "Could not read the rewatch sessions back: ${error.message}" }
+    private fun refreshRewatchSessions(media: TrackingMediaReference) {
+        scope.launch {
+            var lastRead: List<SimklLibraryEntry>? = null
+            var seen = false
+            for (waitMs in SIMKL_REWATCH_SESSION_READ_DELAYS_MS) {
+                delay(waitMs)
+                val sessions = runCatching { remote.fetchRewatchSessions() }
+                    .onFailure { error ->
+                        log.w { "Could not read the rewatch sessions back: ${error.message}" }
+                    }
+                    .getOrNull() ?: continue
+                lastRead = sessions
+                if (sessions.holdsRewatchEpisode(media)) {
+                    seen = true
+                    break
                 }
-                .getOrNull() ?: return@repeat
-            lastRead = sessions
-            if (sessions.holdsRewatchEpisode(media)) return sessions
-        }
-        lastRead?.let { sessions ->
-            log.i {
-                "The rewatch sessions do not hold the confirmed episode after " +
-                    "${SIMKL_REWATCH_SESSION_READ_ATTEMPTS} reads: " +
-                    "${sessions.count(SimklLibraryEntry::isRewatch)} session rows"
             }
+            val last = lastRead
+            if (!seen && last != null) {
+                log.i {
+                    "The rewatch sessions do not hold the confirmed episode yet: " +
+                        "${last.count(SimklLibraryEntry::isRewatch)} session rows"
+                }
+            }
+            last?.let { sessions -> SimklSyncRepository.adoptRewatchSessions(sessions) }
         }
-        return lastRead
     }
 
     private fun isActiveProfile(profileId: Int): Boolean = ProfileRepository.activeProfileId == profileId
+
+    /** Keeps the session refresh alive after the prompt is answered and its caller is gone. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val log = Logger.withTag("SimklMutation")
 }
