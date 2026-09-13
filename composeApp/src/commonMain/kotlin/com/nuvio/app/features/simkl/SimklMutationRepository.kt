@@ -339,12 +339,13 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
      */
     private suspend fun rewatchReachedTheAccount(media: TrackingMediaReference): Boolean {
         val episode = media.episode ?: return false
+        val seasonNumber = episode.season ?: return false
         for (waitMs in SIMKL_REWATCH_RECHECK_DELAYS_MS) {
             delay(waitMs)
             val sessions = runCatching { remote.fetchRewatchSessions() }.getOrNull() ?: continue
             if (
                 sessions.holdsRewatchEpisode(media) ||
-                sessions.holdsRewatchAt(seasonNumber = episode.season, episodeNumber = episode.number)
+                sessions.holdsRewatchAt(seasonNumber = seasonNumber, episodeNumber = episode.number)
             ) {
                 SimklSyncRepository.adoptRewatchSessions(sessions)
                 return true
