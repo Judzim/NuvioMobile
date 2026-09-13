@@ -84,10 +84,6 @@ internal class SimklMutationService(
                 query = if (allowRewatch) SIMKL_ALLOW_REWATCH_QUERY else emptyMap(),
                 body = body,
                 retryPolicy = SimklRetryPolicy.SYNC_WRITE,
-                // A repeat viewing of an episode the history already holds is the same shape of call as
-                // a stop scrobble, and Simkl answers both with a conflict that means the session is
-                // there. Reading it as a failure is what made a recorded rewatch report an error.
-                scrobbleStopConflictIsSuccess = allowRewatch,
             ),
         )
         val receipt = response.toHistoryMutationReceipt(candidates, json)
@@ -322,35 +318,9 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         }.onFailure { error ->
             log.w { "Failed to record confirmed Simkl rewatch: ${error.message}" }
         }.isSuccess
+        if (!written) return false
         refreshRewatchSessions(media)
-        if (written) return true
-        // A write that came back as an error can still have landed: Simkl records a repeat viewing and
-        // reports it with a status the client reads as a failure. The account is asked before the answer
-        // is called a failure, and only the episode coordinates are compared, which nothing else on the
-        // account can produce at this moment.
-        return rewatchReachedTheAccount(media)
-    }
-
-    /**
-     * Looks at the account for the episode a failed write was supposed to record.
-     *
-     * Two looks at most, because the user is waiting for the answer here: a rewatch that Simkl took
-     * shows up on the sessions within seconds, and one that it refused never will.
-     */
-    private suspend fun rewatchReachedTheAccount(media: TrackingMediaReference): Boolean {
-        val episode = media.episode ?: return false
-        for (waitMs in SIMKL_REWATCH_RECHECK_DELAYS_MS) {
-            delay(waitMs)
-            val sessions = runCatching { remote.fetchRewatchSessions() }.getOrNull() ?: continue
-            if (
-                sessions.holdsRewatchEpisode(media) ||
-                sessions.holdsRewatchAt(seasonNumber = episode.season, episodeNumber = episode.number)
-            ) {
-                SimklSyncRepository.adoptRewatchSessions(sessions)
-                return true
-            }
-        }
-        return false
+        return true
     }
 
     /**

@@ -134,23 +134,6 @@ internal fun List<SimklLibraryEntry>.holdsRewatchEpisode(media: TrackingMediaRef
     }
 }
 
-/**
- * True when any session holds a rewatch at this season and episode, whoever the show belongs to.
- *
- * Used only to tell a write that errored but landed from one that did not. Identifying the show is
- * besides the point there: the coordinates come from the episode just written, and the account only
- * holds what the user put there.
- */
-internal fun List<SimklLibraryEntry>.holdsRewatchAt(
-    seasonNumber: Int,
-    episodeNumber: Int,
-): Boolean = any { entry ->
-    entry.isRewatch &&
-        entry.rewatchedEpisodes().any { rewatched ->
-            rewatched.seasonNumber == seasonNumber && rewatched.episodeNumber == episodeNumber
-        }
-}
-
 internal fun SimklMedia.rewatchMatchKeys(contentId: String): List<String> = buildList {
     add(contentId)
     ids.idValue("imdb")?.let { imdb -> add(imdb); add("imdb:$imdb") }
