@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - simkl-rewatch-build
+      - simkl-rewatch-build-22
 
 permissions:
   contents: read
