@@ -14,7 +14,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -22,7 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.rewatch_notice_declined
 import nuvio.composeapp.generated.resources.rewatch_notice_failed
@@ -57,7 +55,6 @@ private fun RewatchQuestionPopup() {
     val prompt by RewatchPromptRepository.prompt.collectAsStateWithLifecycle()
     val active = prompt ?: return
     val promptKey = "${active.media.stableKey}:${active.watchedAtEpochMs}"
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(promptKey) {
         delay(REWATCH_PROMPT_TIMEOUT_MS)
@@ -104,7 +101,7 @@ private fun RewatchQuestionPopup() {
                         )
                     }
                     TextButton(
-                        onClick = { scope.launch { RewatchPromptRepository.confirm() } },
+                        onClick = RewatchPromptRepository::confirm,
                         modifier = Modifier.weight(1f),
                     ) {
                         Text(
