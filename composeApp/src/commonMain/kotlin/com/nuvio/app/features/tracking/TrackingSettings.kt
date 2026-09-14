@@ -2,6 +2,7 @@ package com.nuvio.app.features.tracking
 
 import com.nuvio.app.features.library.LibrarySourceMode
 import com.nuvio.app.features.simkl.SimklAnimeIdPreference
+import com.nuvio.app.features.simkl.SimklRewatchMode
 import com.nuvio.app.features.trakt.MoreLikeThisSourcePreference
 import com.nuvio.app.features.trakt.TraktSettingsRepository
 import com.nuvio.app.features.trakt.TraktSettingsUiState
@@ -40,4 +41,11 @@ object TrackingSettingsRepository {
 
     fun setSimklAnimeIdPreference(preference: SimklAnimeIdPreference) =
         TraktSettingsRepository.setSimklAnimeIdPreference(preference)
+
+    fun setSimklRewatchMode(mode: SimklRewatchMode) =
+        TraktSettingsRepository.setSimklRewatchMode(mode)
+
+    /** Where a Simkl playback counts as finished, in percent. */
+    fun setSimklWatchedThresholdPercent(percent: Int) =
+        TraktSettingsRepository.setSimklWatchedThresholdPercent(percent)
 }
