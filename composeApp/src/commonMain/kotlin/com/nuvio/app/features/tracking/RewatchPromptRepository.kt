@@ -1,9 +1,13 @@
 package com.nuvio.app.features.tracking
 
 import com.nuvio.app.features.simkl.SimklMutationRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /** A finished playback the user can still choose to record as a rewatch. */
 data class RewatchPrompt(
@@ -38,6 +42,13 @@ data class RewatchNotice(val kind: RewatchNoticeKind)
  * device (see `deriveSimklRewatchRuns`).
  */
 object RewatchPromptRepository {
+    /**
+     * Where the write of a confirmed rewatch runs. It cannot be the scope of the popup that asked the
+     * question: clearing the prompt takes that popup out of the composition, which cancels its scope,
+     * and the write must not be cancelled halfway.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     private val _prompt = MutableStateFlow<RewatchPrompt?>(null)
     val prompt: StateFlow<RewatchPrompt?> = _prompt.asStateFlow()
 
@@ -59,14 +70,21 @@ object RewatchPromptRepository {
         _notice.value = RewatchNotice(RewatchNoticeKind.NOT_RECORDED)
     }
 
-    /** Records the pending rewatch and closes the prompt. */
-    suspend fun confirm() {
+    /**
+     * Records the pending rewatch and closes the prompt.
+     *
+     * The answer is shown when the write is done, not when the button is tapped, and it survives the
+     * popup closing: that is the difference between a tap that says what happened and one that does not.
+     */
+    fun confirm() {
         val active = _prompt.value ?: return
         _prompt.value = null
-        val recorded = SimklMutationRepository.recordConfirmedRewatch(prompt = active)
-        _notice.value = RewatchNotice(
-            if (recorded) RewatchNoticeKind.RECORDED else RewatchNoticeKind.FAILED,
-        )
+        scope.launch {
+            val recorded = SimklMutationRepository.recordConfirmedRewatch(prompt = active)
+            _notice.value = RewatchNotice(
+                if (recorded) RewatchNoticeKind.RECORDED else RewatchNoticeKind.FAILED,
+            )
+        }
     }
 
     /** Hides the feedback of the last answer. */
