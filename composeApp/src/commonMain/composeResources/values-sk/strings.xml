@@ -2097,6 +2097,14 @@
     <string name="settings_tracking_rewatch_subtitle">Zaznamenávať opakované pozretia dokončených titulov ako samostatné relácie opakovaného pozretia v Simkl.</string>
     <string name="settings_tracking_rewatch_dialog_title">Opakované pozretia v Simkl</string>
     <string name="settings_tracking_rewatch_dialog_subtitle">Relácie opakovaného pozretia sú funkciou Simkl Pro a vytvárajú sa len pre tituly, ktoré ste už dokončili.</string>
+    <string name="settings_tracking_rewatch_nextup_title">Opakované pozretia v Continue Watching</string>
+    <string name="settings_tracking_rewatch_nextup_subtitle">Vyberte, kedy vám opakované pozretie na účte Simkl začne ponúkať ďalšiu epizódu.</string>
+    <string name="settings_tracking_rewatch_nextup_always">Vždy</string>
+    <string name="settings_tracking_rewatch_nextup_always_description">Každá opakovane pozretá epizóda ponúkne tú nasledujúcu.</string>
+    <string name="settings_tracking_rewatch_nextup_after_two">Po dvoch epizódach za sebou</string>
+    <string name="settings_tracking_rewatch_nextup_after_two_description">Ďalšiu epizódu ponúkne len opakované pozretie dvoch epizód za sebou.</string>
+    <string name="settings_tracking_rewatch_nextup_never">Nikdy</string>
+    <string name="settings_tracking_rewatch_nextup_never_description">Opakované pozretia sa v Continue Watching nezobrazia a riadok sa riadi tým, čo ste dokončili.</string>
     <string name="settings_tracking_rewatch_off">Vypnuté</string>
     <string name="settings_tracking_rewatch_off_description">Nuvio nikdy nezaznamenáva relácie opakovaného pozretia.</string>
     <string name="settings_tracking_rewatch_manual">Ručne</string>

@@ -4,9 +4,6 @@ import com.nuvio.app.core.time.parseZonedIsoDateTimeToEpochMs
 import com.nuvio.app.features.tracking.RewatchRunPosition
 import com.nuvio.app.features.tracking.TrackingMediaReference
 
-/** Two episodes in a row make a run; one on its own is a rewatch of a random episode. */
-private const val MINIMUM_RUN_EPISODES = 2
-
 /**
  * Reads the rewatch sessions of an account and keeps the ones that look like a run.
  *
@@ -18,26 +15,43 @@ private const val MINIMUM_RUN_EPISODES = 2
  * Sessions are merged per series first, because Simkl splits a running rewatch into a new session
  * once the same episode is rewatched 48 hours later; the run itself continues across the split.
  * Episodes then have to form a chain of consecutive numbers inside one season, and the chain holding
- * the most recently rewatched episode is the run. Anything shorter is left alone: the user asked for
- * a single episode, not for the series to follow along in Continue Watching.
+ * the most recently rewatched episode is the run. How long that chain has to be is the user's
+ * choice; see [SimklRewatchNextUpMode].
  */
 internal fun deriveSimklRewatchRuns(
     entries: List<SimklLibraryEntry>,
     animeIdPreference: SimklAnimeIdPreference,
+    minimumRunEpisodes: Int?,
 ): List<RewatchRunPosition> {
+    val requiredEpisodes = minimumRunEpisodes ?: return emptyList()
     val sessions = entries.filter { entry -> entry.isRewatch && entry.media != null }
     if (sessions.isEmpty()) return emptyList()
     return sessions
         .groupBy { entry -> entry.media?.canonicalContentId(animeIdPreference).orEmpty() }
         .filterKeys { contentId -> contentId.isNotEmpty() }
-        .mapNotNull { (contentId, rows) -> buildRewatchRun(contentId, rows, animeIdPreference) }
+        .mapNotNull { (contentId, rows) ->
+            buildRewatchRun(contentId, rows, animeIdPreference, requiredEpisodes)
+        }
         .sortedByDescending(RewatchRunPosition::markedAtEpochMs)
 }
+
+/**
+ * What one read of the rewatch sessions produced: the runs the app offers and the sessions they were
+ * derived from.
+ *
+ * The sessions are kept on the snapshot next to the runs, so a change of [SimklRewatchNextUpMode] can
+ * re-derive the runs straight away instead of waiting for the next read of the account.
+ */
+internal data class SimklRewatchRead(
+    val runs: List<RewatchRunPosition>,
+    val sessions: List<SimklLibraryEntry>,
+)
 
 private fun buildRewatchRun(
     contentId: String,
     rows: List<SimklLibraryEntry>,
     animeIdPreference: SimklAnimeIdPreference,
+    minimumRunEpisodes: Int,
 ): RewatchRunPosition? {
     val episodes = rows
         .flatMap { row -> row.rewatchedEpisodes() }
@@ -53,7 +67,7 @@ private fun buildRewatchRun(
     val chain = consecutiveChains(episodes)
         .firstOrNull { candidate -> candidate.any { it.isSameEpisodeAs(newest) } }
         ?: return null
-    if (chain.size < MINIMUM_RUN_EPISODES) return null
+    if (chain.size < minimumRunEpisodes) return null
     val position = chain.maxBy { episode -> episode.episodeNumber }
     return RewatchRunPosition(
         contentId = contentId,

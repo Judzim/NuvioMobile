@@ -1292,6 +1292,14 @@
     <string name="settings_tracking_rewatch_subtitle">Record repeat viewings of finished titles as separate Simkl rewatch sessions.</string>
     <string name="settings_tracking_rewatch_dialog_title">Simkl rewatches</string>
     <string name="settings_tracking_rewatch_dialog_subtitle">Rewatch sessions are a Simkl Pro feature and are only created for titles you already finished.</string>
+    <string name="settings_tracking_rewatch_nextup_title">Rewatches in Continue Watching</string>
+    <string name="settings_tracking_rewatch_nextup_subtitle">Choose when a rewatch on your Simkl account starts offering the next episode.</string>
+    <string name="settings_tracking_rewatch_nextup_always">Always</string>
+    <string name="settings_tracking_rewatch_nextup_always_description">Any rewatched episode offers the one after it.</string>
+    <string name="settings_tracking_rewatch_nextup_after_two">After 2 consecutive episodes</string>
+    <string name="settings_tracking_rewatch_nextup_after_two_description">Only a rewatch of two episodes in a row offers the next one.</string>
+    <string name="settings_tracking_rewatch_nextup_never">Never</string>
+    <string name="settings_tracking_rewatch_nextup_never_description">Rewatches stay out of Continue Watching, and the row follows what you finished watching.</string>
     <string name="settings_tracking_rewatch_off">Off</string>
     <string name="settings_tracking_rewatch_off_description">Nuvio never records rewatch sessions.</string>
     <string name="settings_tracking_rewatch_manual">Manual</string>
