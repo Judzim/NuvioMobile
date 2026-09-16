@@ -194,6 +194,11 @@ data class SimklSyncSnapshot(
      * position with rewatch progress.
      */
     val rewatchRuns: List<RewatchRunPosition> = emptyList(),
+    /**
+     * The sessions [rewatchRuns] were derived from, kept so a change of the next up preference can
+     * re-derive them without another read of the account.
+     */
+    val rewatchSessions: List<SimklLibraryEntry> = emptyList(),
     val lastSyncedAtEpochMs: Long? = null,
     val lastCheckedAtEpochMs: Long? = null,
 )

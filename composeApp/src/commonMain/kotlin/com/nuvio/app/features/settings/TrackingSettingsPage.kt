@@ -35,6 +35,7 @@ import com.nuvio.app.features.simkl.SimklAuthRepository
 import com.nuvio.app.features.simkl.SimklAuthUiState
 import com.nuvio.app.features.simkl.SimklConnectionMode
 import com.nuvio.app.features.simkl.SimklRewatchMode
+import com.nuvio.app.features.simkl.SimklRewatchNextUpMode
 import com.nuvio.app.features.simkl.SimklWatchedThresholdRange
 import com.nuvio.app.features.simkl.isSimklRewatchModeSelectable
 import com.nuvio.app.features.tracking.TrackingProviderId
@@ -64,6 +65,14 @@ import nuvio.composeapp.generated.resources.settings_tracking_rewatch_dialog_sub
 import nuvio.composeapp.generated.resources.settings_tracking_rewatch_dialog_title
 import nuvio.composeapp.generated.resources.settings_tracking_rewatch_manual
 import nuvio.composeapp.generated.resources.settings_tracking_rewatch_manual_description
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_nextup_after_two
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_nextup_after_two_description
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_nextup_always
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_nextup_always_description
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_nextup_never
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_nextup_never_description
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_nextup_subtitle
+import nuvio.composeapp.generated.resources.settings_tracking_rewatch_nextup_title
 import nuvio.composeapp.generated.resources.settings_tracking_rewatch_off
 import nuvio.composeapp.generated.resources.settings_tracking_rewatch_off_description
 import nuvio.composeapp.generated.resources.settings_tracking_rewatch_subtitle
@@ -618,6 +627,7 @@ private fun SimklFeaturesSection(
 ) {
     var showAnimeIdPicker by rememberSaveable { mutableStateOf(false) }
     var showRewatchPicker by rememberSaveable { mutableStateOf(false) }
+    var showNextUpPicker by rememberSaveable { mutableStateOf(false) }
     var showRewatchUpgradeDialog by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -641,6 +651,14 @@ private fun SimklFeaturesSection(
             value = simklRewatchModeLabel(settingsUiState.simklRewatchMode),
             isTablet = isTablet,
             onClick = { showRewatchPicker = true },
+        )
+        SettingsGroupDivider(isTablet = isTablet)
+        TrackingPreferenceActionRow(
+            title = stringResource(Res.string.settings_tracking_rewatch_nextup_title),
+            description = stringResource(Res.string.settings_tracking_rewatch_nextup_subtitle),
+            value = simklRewatchNextUpModeLabel(settingsUiState.simklRewatchNextUpMode),
+            isTablet = isTablet,
+            onClick = { showNextUpPicker = true },
         )
     }
 
@@ -685,6 +703,22 @@ private fun SimklFeaturesSection(
 
     if (showRewatchUpgradeDialog) {
         SimklRewatchUpgradeDialog(onDismiss = { showRewatchUpgradeDialog = false })
+    }
+
+    if (showNextUpPicker) {
+        TrackingAdaptivePicker(
+            isTablet = isTablet,
+            title = stringResource(Res.string.settings_tracking_rewatch_nextup_title),
+            subtitle = stringResource(Res.string.settings_tracking_rewatch_nextup_subtitle),
+            selectedValue = settingsUiState.simklRewatchNextUpMode,
+            options = simklRewatchNextUpModeOptions(),
+            onSelected = { mode ->
+                // The runs the app shows are re-derived from the sessions it already read, so the row
+                // follows the choice right away instead of at the next sync.
+                scope.launch { TrackingSettingsRepository.setSimklRewatchNextUpMode(mode) }
+            },
+            onDismiss = { showNextUpPicker = false },
+        )
     }
 }
 
@@ -776,6 +810,32 @@ private fun simklRewatchModeLabel(mode: SimklRewatchMode): String = when (mode) 
     SimklRewatchMode.OFF -> stringResource(Res.string.settings_tracking_rewatch_off)
     SimklRewatchMode.MANUAL -> stringResource(Res.string.settings_tracking_rewatch_manual)
     SimklRewatchMode.AUTOMATIC -> stringResource(Res.string.settings_tracking_rewatch_automatic)
+}
+
+@Composable
+private fun simklRewatchNextUpModeOptions(): List<TrackingPickerOption<SimklRewatchNextUpMode>> = listOf(
+    TrackingPickerOption(
+        value = SimklRewatchNextUpMode.ALWAYS,
+        title = stringResource(Res.string.settings_tracking_rewatch_nextup_always),
+        description = stringResource(Res.string.settings_tracking_rewatch_nextup_always_description),
+    ),
+    TrackingPickerOption(
+        value = SimklRewatchNextUpMode.AFTER_TWO,
+        title = stringResource(Res.string.settings_tracking_rewatch_nextup_after_two),
+        description = stringResource(Res.string.settings_tracking_rewatch_nextup_after_two_description),
+    ),
+    TrackingPickerOption(
+        value = SimklRewatchNextUpMode.NEVER,
+        title = stringResource(Res.string.settings_tracking_rewatch_nextup_never),
+        description = stringResource(Res.string.settings_tracking_rewatch_nextup_never_description),
+    ),
+)
+
+@Composable
+private fun simklRewatchNextUpModeLabel(mode: SimklRewatchNextUpMode): String = when (mode) {
+    SimklRewatchNextUpMode.ALWAYS -> stringResource(Res.string.settings_tracking_rewatch_nextup_always)
+    SimklRewatchNextUpMode.AFTER_TWO -> stringResource(Res.string.settings_tracking_rewatch_nextup_after_two)
+    SimklRewatchNextUpMode.NEVER -> stringResource(Res.string.settings_tracking_rewatch_nextup_never)
 }
 
 @Composable
