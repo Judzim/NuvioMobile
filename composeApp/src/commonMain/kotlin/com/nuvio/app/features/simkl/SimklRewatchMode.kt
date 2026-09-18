@@ -60,6 +60,42 @@ internal fun coerceSimklWatchedThresholdPercent(percent: Int): Int = percent.coe
     maximumValue = SIMKL_WATCHED_THRESHOLD_MAX_PERCENT,
 )
 
+/**
+ * How far before the credits marker a playback still counts as finished.
+ *
+ * The marker comes from submissions, and a different release can shift the credits by a few seconds, so
+ * a playback that stopped just short of it is treated as finished rather than as an unfinished watch.
+ * One percentage point of the video, which is around 27 seconds of a 45 minute episode.
+ */
+internal const val SIMKL_CONTENT_END_TOLERANCE_PERCENT = 1.0
+
+/**
+ * Where a playback counts as finished, in percent, for everything Simkl is told about it.
+ *
+ * IntroDB carries the credits marker, and that is where the content really ends, so the marker is the
+ * completion point whenever there is one: a playback that stopped before it has not finished, whatever
+ * percentage the user set as their own floor. The percentage is the fallback, and it is what decides
+ * for the items IntroDB knows nothing about.
+ *
+ * The marker is read one point early, so a timestamp that is a few seconds off does not leave a finished
+ * playback reported as unfinished. Under what Simkl needs to record a watch it cannot be used at all,
+ * since a stop reported there is not counted by the account, so the threshold decides instead. That is
+ * also why the threshold itself is never read below that bar.
+ */
+internal fun resolvedSimklCompletionPercent(
+    userThresholdPercent: Double,
+    contentEndPercent: Double?,
+): Double {
+    val userThreshold = userThresholdPercent
+        .takeIf { value -> value.isFinite() }
+        ?.coerceAtLeast(SIMKL_REWATCH_MIN_PROGRESS_PERCENT)
+        ?: SIMKL_REWATCH_MIN_PROGRESS_PERCENT
+    val marker = contentEndPercent?.takeIf { value -> value.isFinite() } ?: return userThreshold
+    val markerWithTolerance = marker - SIMKL_CONTENT_END_TOLERANCE_PERCENT
+    if (markerWithTolerance < SIMKL_REWATCH_MIN_PROGRESS_PERCENT) return userThreshold
+    return markerWithTolerance
+}
+
 /** Simkl merges two watches of the same item this close together, so asking would be pointless. */
 internal const val SIMKL_REWATCH_MIN_GAP_MS = 48L * 60L * 60L * 1_000L
 
