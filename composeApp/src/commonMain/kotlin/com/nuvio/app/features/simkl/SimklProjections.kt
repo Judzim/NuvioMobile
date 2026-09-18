@@ -163,15 +163,10 @@ internal fun SimklSyncSnapshot.movieAlternateWatchedKeys(): Set<String> {
     return extraKeys
 }
 
-internal fun SimklSyncSnapshot.toSimklProgressEntries(
-    completionThresholdPercent: Double = simklWatchedThresholdPercent,
-): List<WatchProgressEntry> =
+internal fun SimklSyncSnapshot.toSimklProgressEntries(): List<WatchProgressEntry> =
     playback
         .mapNotNull { session ->
-            session.toWatchProgressEntry(
-                libraryEntries = entries,
-                completionThresholdPercent = completionThresholdPercent,
-            )
+            session.toWatchProgressEntry(libraryEntries = entries)
         }
         .groupBy(WatchProgressEntry::progressKey)
         .mapNotNull { (_, candidates) -> candidates.maxByOrNull(WatchProgressEntry::lastUpdatedEpochMs) }
@@ -407,7 +402,6 @@ internal fun parseSimklUtcEpochMs(value: String?): Long? {
 
 internal fun SimklPlaybackSession.toWatchProgressEntry(
     libraryEntries: List<SimklLibraryEntry> = emptyList(),
-    completionThresholdPercent: Double = simklWatchedThresholdPercent,
 ): WatchProgressEntry? {
     val media = media ?: return null
     val parentId = media.canonicalContentId() ?: return null
@@ -461,7 +455,13 @@ internal fun SimklPlaybackSession.toWatchProgressEntry(
         lastPositionMs = positionMs,
         durationMs = durationMs,
         lastUpdatedEpochMs = updatedAt,
-        isCompleted = normalizedProgress >= completionThresholdPercent,
+        // A playback session is a position Simkl can resume, not a finished watch. Where a playback
+        // ends is the credits marker when there is one, and the app reports a playback that has not
+        // reached it as a pause, which Simkl answers by keeping this row with the percentage the user
+        // stopped at. Reading that percentage as a finished watch would drop the position out of
+        // Continue Watching and offer the next episode instead. A watch the account really recorded
+        // arrives through the watched history, and that supersedes this row.
+        isCompleted = false,
         progressPercent = normalizedProgress.toFloat(),
         source = WatchProgressSourceSimklPlayback,
         trackingProviderId = TrackingProviderId.SIMKL.storageId,
