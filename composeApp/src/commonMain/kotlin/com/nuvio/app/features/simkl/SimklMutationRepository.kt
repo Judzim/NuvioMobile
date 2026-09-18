@@ -228,8 +228,12 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         val mode = settings.simklRewatchMode
         val accountType = SimklAuthRepository.uiState.value.accountType
         // The user decides where a playback counts as finished, and that single number decides both
-        // what Simkl is told and whether a rewatch can be recorded.
-        val completionThresholdPercent = settings.simklWatchedThresholdPercent.toDouble()
+        // what Simkl is told and whether a rewatch can be recorded. IntroDB's credits marker pulls it
+        // down when the content is over before the user's own point, and never under Simkl's own bar.
+        val completionThresholdPercent = resolvedSimklCompletionPercent(
+            userThresholdPercent = settings.simklWatchedThresholdPercent.toDouble(),
+            contentEndPercent = event.contentEndPercent,
+        )
         // A playback the user stopped below their own threshold is a pause for Simkl: leaving it as a
         // stop would have Simkl apply its own 80% rule and mark the title watched anyway.
         val reportingAction = if (

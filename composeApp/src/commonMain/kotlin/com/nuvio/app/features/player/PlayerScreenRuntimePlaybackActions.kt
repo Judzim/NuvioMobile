@@ -1,5 +1,6 @@
 package com.nuvio.app.features.player
 
+import com.nuvio.app.features.player.skip.contentEndPercent
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.tracking.TrackingMediaReference
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
@@ -174,13 +175,21 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
     val percent = provided ?: currentPlaybackProgressPercent()
     val mediaSnapshot = currentTrackingMedia
     val inputsSnapshot = snapshotTrackingScrobbleItemInputs()
+    // IntroDB knows where the credits start, and a playback that reached them is over for the tracker
+    // even when it stopped below the percentage the user set. Snapshot here, before the write leaves,
+    // because the marker and the duration belong to this playback, not to the request.
+    val contentEndPercent = contentEndIntervals.contentEndPercent(playbackSnapshot.durationMs)
     scope.launch(NonCancellable) {
         val media = mediaSnapshot ?: inputsSnapshot.buildMedia()
         if (!media.hasResolvableIdentity) return@launch
         TrackingScrobbleCoordinator.scrobble(
             profileId = profileId,
             action = action,
-            event = TrackingScrobbleEvent(media = media, progressPercent = percent.toDouble()),
+            event = TrackingScrobbleEvent(
+                media = media,
+                progressPercent = percent.toDouble(),
+                contentEndPercent = contentEndPercent,
+            ),
         )
     }
     currentTrackingMedia = null

@@ -60,6 +60,27 @@ internal fun coerceSimklWatchedThresholdPercent(percent: Int): Int = percent.coe
     maximumValue = SIMKL_WATCHED_THRESHOLD_MAX_PERCENT,
 )
 
+/**
+ * Where a playback counts as finished, in percent, for everything Simkl is told about it.
+ *
+ * IntroDB knows where the credits start, and a playback that reached them is over even when the user
+ * set a higher completion point than that. The marker never pulls the value under what Simkl needs to
+ * record a watch: a marker that lands there is ignored, so a segment that is wrong or early can only
+ * cost a confirmation, never force a number Simkl would not believe.
+ */
+internal fun resolvedSimklCompletionPercent(
+    userThresholdPercent: Double,
+    contentEndPercent: Double?,
+): Double {
+    val userThreshold = userThresholdPercent
+        .takeIf { value -> value.isFinite() }
+        ?.coerceAtLeast(SIMKL_REWATCH_MIN_PROGRESS_PERCENT)
+        ?: SIMKL_REWATCH_MIN_PROGRESS_PERCENT
+    val marker = contentEndPercent?.takeIf { value -> value.isFinite() } ?: return userThreshold
+    if (marker < SIMKL_REWATCH_MIN_PROGRESS_PERCENT) return userThreshold
+    return minOf(userThreshold, marker)
+}
+
 /** Simkl merges two watches of the same item this close together, so asking would be pointless. */
 internal const val SIMKL_REWATCH_MIN_GAP_MS = 48L * 60L * 60L * 1_000L
 
