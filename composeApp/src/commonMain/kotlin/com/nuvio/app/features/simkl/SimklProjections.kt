@@ -163,15 +163,10 @@ internal fun SimklSyncSnapshot.movieAlternateWatchedKeys(): Set<String> {
     return extraKeys
 }
 
-internal fun SimklSyncSnapshot.toSimklProgressEntries(
-    completionThresholdPercent: Double = simklWatchedThresholdPercent,
-): List<WatchProgressEntry> =
+internal fun SimklSyncSnapshot.toSimklProgressEntries(): List<WatchProgressEntry> =
     playback
         .mapNotNull { session ->
-            session.toWatchProgressEntry(
-                libraryEntries = entries,
-                completionThresholdPercent = completionThresholdPercent,
-            )
+            session.toWatchProgressEntry(libraryEntries = entries)
         }
         .groupBy(WatchProgressEntry::progressKey)
         .mapNotNull { (_, candidates) -> candidates.maxByOrNull(WatchProgressEntry::lastUpdatedEpochMs) }
@@ -407,7 +402,6 @@ internal fun parseSimklUtcEpochMs(value: String?): Long? {
 
 internal fun SimklPlaybackSession.toWatchProgressEntry(
     libraryEntries: List<SimklLibraryEntry> = emptyList(),
-    completionThresholdPercent: Double = simklWatchedThresholdPercent,
 ): WatchProgressEntry? {
     val media = media ?: return null
     val parentId = media.canonicalContentId() ?: return null
@@ -435,7 +429,15 @@ internal fun SimklPlaybackSession.toWatchProgressEntry(
         )
     }
     val normalizedProgress = progress.coerceIn(0.0, 100.0)
-    val durationMs = media.runtime?.takeIf { it > 0 }?.toLong()?.times(60_000L) ?: 0L
+    // A series reports the runtime of the show, not of the episode, so scaling the percentage by it
+    // invents a timecode: an episode stopped at 83 % of 47 minutes resumed at 42 minutes, because
+    // 83 % of the show's 52 minutes is 43. Leaving the duration out, with the percentage in place,
+    // makes the player scale it by the duration it really has, which is what a Trakt row already does.
+    val durationMs = if (isMovie) {
+        media.runtime?.takeIf { it > 0 }?.toLong()?.times(60_000L) ?: 0L
+    } else {
+        0L
+    }
     val positionMs = if (durationMs > 0L) (durationMs * normalizedProgress / 100.0).toLong() else 0L
     val updatedAt = parseSimklUtcEpochMs(pausedAt)
         ?: parseSimklUtcEpochMs(watchedAt)
@@ -453,7 +455,13 @@ internal fun SimklPlaybackSession.toWatchProgressEntry(
         lastPositionMs = positionMs,
         durationMs = durationMs,
         lastUpdatedEpochMs = updatedAt,
-        isCompleted = normalizedProgress >= completionThresholdPercent,
+        // A playback session is a position Simkl can resume, not a finished watch. Where a playback
+        // ends is the credits marker when there is one, and the app reports a playback that has not
+        // reached it as a pause, which Simkl answers by keeping this row with the percentage the user
+        // stopped at. Reading that percentage as a finished watch would drop the position out of
+        // Continue Watching and offer the next episode instead. A watch the account really recorded
+        // arrives through the watched history, and that supersedes this row.
+        isCompleted = false,
         progressPercent = normalizedProgress.toFloat(),
         source = WatchProgressSourceSimklPlayback,
         trackingProviderId = TrackingProviderId.SIMKL.storageId,

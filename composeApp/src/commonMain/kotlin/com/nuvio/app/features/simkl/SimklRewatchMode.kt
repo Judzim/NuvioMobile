@@ -2,6 +2,7 @@ package com.nuvio.app.features.simkl
 
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
+import com.nuvio.app.features.watching.domain.ContentEndTolerancePercent
 
 /**
  * How Nuvio records rewatches on Simkl.
@@ -59,6 +60,33 @@ internal fun coerceSimklWatchedThresholdPercent(percent: Int): Int = percent.coe
     minimumValue = SIMKL_WATCHED_THRESHOLD_MIN_PERCENT,
     maximumValue = SIMKL_WATCHED_THRESHOLD_MAX_PERCENT,
 )
+
+/**
+ * Where a playback counts as finished, in percent, for everything Simkl is told about it.
+ *
+ * IntroDB carries the credits marker, and that is where the content really ends, so the marker is the
+ * completion point whenever there is one: a playback that stopped before it has not finished, whatever
+ * percentage the user set as their own floor. The percentage is the fallback, and it is what decides
+ * for the items IntroDB knows nothing about.
+ *
+ * The marker is read one point early, so a timestamp that is a few seconds off does not leave a finished
+ * playback reported as unfinished. Under what Simkl needs to record a watch it cannot be used at all,
+ * since a stop reported there is not counted by the account, so the threshold decides instead. That is
+ * also why the threshold itself is never read below that bar.
+ */
+internal fun resolvedSimklCompletionPercent(
+    userThresholdPercent: Double,
+    contentEndPercent: Double?,
+): Double {
+    val userThreshold = userThresholdPercent
+        .takeIf { value -> value.isFinite() }
+        ?.coerceAtLeast(SIMKL_REWATCH_MIN_PROGRESS_PERCENT)
+        ?: SIMKL_REWATCH_MIN_PROGRESS_PERCENT
+    val marker = contentEndPercent?.takeIf { value -> value.isFinite() } ?: return userThreshold
+    val markerWithTolerance = marker - ContentEndTolerancePercent
+    if (markerWithTolerance < SIMKL_REWATCH_MIN_PROGRESS_PERCENT) return userThreshold
+    return markerWithTolerance
+}
 
 /** Simkl merges two watches of the same item this close together, so asking would be pointless. */
 internal const val SIMKL_REWATCH_MIN_GAP_MS = 48L * 60L * 60L * 1_000L
