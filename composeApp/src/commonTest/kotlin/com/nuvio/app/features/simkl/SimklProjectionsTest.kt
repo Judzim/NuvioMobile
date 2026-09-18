@@ -205,8 +205,11 @@ class SimklProjectionsTest {
         assertEquals(1, entry.seasonNumber)
         assertEquals(3, entry.episodeNumber)
         assertEquals(42.2f, entry.progressPercent)
-        assertEquals(3_000_000L, entry.durationMs)
-        assertEquals(1_266_000L, entry.lastPositionMs)
+        // No duration is invented from the show runtime, so the resume goes through the percentage:
+        // the player scales it by the duration of the episode it really opened.
+        assertEquals(0L, entry.durationMs)
+        assertEquals(0L, entry.lastPositionMs)
+        assertEquals(0.422f, entry.progressFraction, 0.0005f)
         assertEquals("simkl-playback:12345", entry.progressKey)
         assertEquals(WatchProgressSourceSimklPlayback, entry.source)
         assertEquals("simkl", entry.trackingProviderId)
@@ -215,6 +218,56 @@ class SimklProjectionsTest {
         assertTrue(entry.poster.orEmpty().contains("simkl.in/posters/12/poster_m.webp"))
         assertFalse(entry.isCompleted)
         assertEquals(1_714_515_180_250L, entry.lastUpdatedEpochMs)
+    }
+
+    @Test
+    fun `a paused playback above the account threshold is still a position to resume`() {
+        val session = SimklPlaybackSession(
+            id = 12345,
+            progress = 81.0,
+            pausedAt = "2024-04-30T22:13:00.250Z",
+            type = "episode",
+            episode = SimklPlaybackEpisode(
+                season = 1,
+                number = 3,
+                title = "Chapter Three",
+            ),
+            show = media(id = 39687, imdb = "tt4574334", runtime = 50),
+        )
+
+        val entry = SimklSyncSnapshot(playback = listOf(session)).toSimklProgressEntries().single()
+
+        // The app reports a playback the credits marker has not been reached in as a pause, and Simkl
+        // keeps it here with the percentage it was given. The row stays a resume point, so Continue
+        // Watching keeps showing where the user stopped instead of offering the next episode.
+        assertFalse(entry.isCompleted)
+        assertFalse(entry.isEffectivelyCompleted)
+        assertEquals(81.0f, entry.progressPercent)
+        assertEquals(0.81f, entry.progressFraction, 0.0005f)
+    }
+
+    @Test
+    fun `a paused playback inside the credits is still a position to resume`() {
+        val session = SimklPlaybackSession(
+            id = 12345,
+            progress = 96.0,
+            pausedAt = "2024-04-30T22:13:00.250Z",
+            type = "episode",
+            episode = SimklPlaybackEpisode(
+                season = 1,
+                number = 3,
+                title = "Chapter Three",
+            ),
+            show = media(id = 39687, imdb = "tt4574334", runtime = 50),
+        )
+
+        val entry = SimklSyncSnapshot(playback = listOf(session)).toSimklProgressEntries().single()
+
+        // A high percentage alone is not a finished watch either: what ends a playback is the credits
+        // marker, and a watch the account recorded reaches Continue Watching through the watched
+        // history, which supersedes this row.
+        assertFalse(entry.isCompleted)
+        assertEquals(96.0f, entry.progressPercent)
     }
 
     @Test
