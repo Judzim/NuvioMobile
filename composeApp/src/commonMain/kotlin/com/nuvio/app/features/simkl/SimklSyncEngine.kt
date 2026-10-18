@@ -133,9 +133,24 @@ internal fun mergeDelta(
     delta: SimklAllItemsResponse,
 ): List<SimklLibraryEntry> {
     val merged = current.mapNotNull { entry -> entry.stableKey()?.let { key -> key to entry } }.toMap().toMutableMap()
+    val deltaEntries = mutableListOf<SimklLibraryEntry>()
     delta.presentTypes().forEach { type ->
         delta.entriesFor(type).forEach { entry ->
             entry.stableKey()?.let { key -> merged[key] = entry }
+            deltaEntries += entry
+        }
+    }
+    // A delta entry can arrive under a new canonical key while the same media is already held
+    // under the old one. Without this pass the library carries the item twice (two Continue
+    // Watching cards, two rows) until a removal reconcile happens to drop the stale key. Mirrors
+    // the TV's second pass.
+    deltaEntries.forEach { deltaEntry ->
+        val deltaMedia = deltaEntry.media ?: return@forEach
+        val deltaKey = deltaEntry.stableKey()
+        merged.entries.removeAll { entry ->
+            entry.key != deltaKey &&
+                entry.value.mediaType == deltaEntry.mediaType &&
+                entry.value.media?.matchesTarget(deltaMedia) == true
         }
     }
     return merged.values.sortedWith(simklEntryComparator)

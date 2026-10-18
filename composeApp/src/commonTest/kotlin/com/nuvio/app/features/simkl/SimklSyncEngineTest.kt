@@ -425,6 +425,30 @@ class SimklSyncEngineTest {
         }
     }
 
+    @Test
+    fun `delta merge drops a row the same media is already held by under another key`() {
+        val stale = SimklLibraryEntry(
+            mediaType = SimklMediaType.SHOWS,
+            status = SimklListStatus.WATCHING,
+            show = SimklMedia(title = "Title 10", ids = buildJsonObject { put("tmdb", 555L) }),
+        )
+        val fresh = SimklLibraryEntry(
+            mediaType = SimklMediaType.SHOWS,
+            status = SimklListStatus.WATCHING,
+            show = SimklMedia(
+                title = "Title 20",
+                ids = buildJsonObject {
+                    put("simkl", 20L)
+                    put("tmdb", 555L)
+                },
+            ),
+        )
+
+        val merged = mergeDelta(listOf(stale), responseOf(fresh))
+
+        assertEquals(listOf(fresh), merged)
+    }
+
     private sealed interface Step {
         data class Activities(val value: SimklActivities) : Step
         data class AllItems(val type: SimklMediaType?, val value: SimklAllItemsResponse) : Step

@@ -287,17 +287,20 @@ internal fun SimklMedia.matchesTarget(target: SimklMedia): Boolean {
 }
 
 private fun TrackingExternalIds.comparableMatch(target: TrackingExternalIds): Boolean? {
+    // The ids a row is judged on, most trustworthy first: the anime-side ids (mal, anidb, anilist,
+    // kitsu) sit behind the tv ids because siblings of one show share them and a row could be
+    // matched on the wrong one. Mirrors the TV's order.
     if (simkl != null && target.simkl != null) return simkl == target.simkl
-    if (mal != null && target.mal != null) return mal == target.mal
-    if (anidb != null && target.anidb != null) return anidb == target.anidb
-    if (anilist != null && target.anilist != null) return anilist == target.anilist
-    if (kitsu != null && target.kitsu != null) return kitsu == target.kitsu
-    if (!tvdb.isNullOrBlank() && !target.tvdb.isNullOrBlank()) {
-        return tvdb.equals(target.tvdb, ignoreCase = true)
-    }
     if (!imdb.isNullOrBlank() && !target.imdb.isNullOrBlank()) {
         return imdb.equals(target.imdb, ignoreCase = true)
     }
     if (tmdb != null && target.tmdb != null) return tmdb == target.tmdb
+    if (!tvdb.isNullOrBlank() && !target.tvdb.isNullOrBlank()) {
+        return tvdb.equals(target.tvdb, ignoreCase = true)
+    }
+    if (mal != null && target.mal != null) return mal == target.mal
+    if (anidb != null && target.anidb != null) return anidb == target.anidb
+    if (anilist != null && target.anilist != null) return anilist == target.anilist
+    if (kitsu != null && target.kitsu != null) return kitsu == target.kitsu
     return null
 }
