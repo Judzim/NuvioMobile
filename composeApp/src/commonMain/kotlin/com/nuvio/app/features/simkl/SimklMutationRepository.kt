@@ -253,6 +253,16 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         }.onFailure { error ->
             log.w { "Failed to close the Simkl rewatch session: ${error.message}" }
         }.getOrDefault(false)
+        if (closed) {
+            // The account took the close, so the run leaves the row at once: Continue Watching
+            // follows the session list and only this object's background read publishes a change,
+            // so waiting for that read would keep the card up for the whole settle window (the
+            // reads sit 3, 10 and 25 seconds apart). The read below still runs and replaces this
+            // with whatever the account reports.
+            SimklSyncRepository.adoptRewatchSessions(
+                snapshot.rewatchSessions.filterNot { session -> session.rewatchId == sessionId },
+            )
+        }
         // The sessions are read back in the background: Continue Watching follows the session list,
         // so the run leaves the row once the read sees the new state.
         refreshRewatchSessions { sessions ->

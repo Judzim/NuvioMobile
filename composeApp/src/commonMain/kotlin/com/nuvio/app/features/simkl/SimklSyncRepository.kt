@@ -248,6 +248,9 @@ object SimklSyncRepository : TrackingProfileStore {
      * are kept, never the canonical rows read beside them.
      */
     internal suspend fun adoptRewatchSessions(sessions: List<SimklLibraryEntry>) {
+        // The preferences are read through the load, never through their defaults: the flow starts
+        // at Off, and a derivation taken before the load would drop the runs it is handed.
+        ensureLoaded()
         val runningSessions = sessions.runningRewatchSessions()
         val runs = runCatching {
             deriveSimklRewatchRuns(
@@ -259,7 +262,6 @@ object SimklSyncRepository : TrackingProfileStore {
             log.w { "Could not read the runs out of the rewatch sessions: ${error.message}" }
             return
         }
-        ensureLoaded()
         val generation = profileGeneration
         val profileId = ProfileRepository.activeProfileId
         snapshotMutex.withLock {
