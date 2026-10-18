@@ -46,7 +46,6 @@ import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.details.SeriesPrimaryAction
-import com.nuvio.app.features.details.isReleasedBy
 import com.nuvio.app.features.details.seriesPrimaryAction
 import com.nuvio.app.features.home.components.HomeCatalogRowSection
 import com.nuvio.app.features.home.components.HomeContinueWatchingSection
@@ -94,6 +93,7 @@ import com.nuvio.app.core.ui.DisintegrationRequest
 import com.nuvio.app.core.poster.withCustomPosterUrls
 import com.nuvio.app.features.watching.application.WatchingState
 import com.nuvio.app.features.watching.domain.WatchingContentRef
+import com.nuvio.app.features.watching.domain.daysUntilExplicitRelease
 import com.nuvio.app.features.watching.domain.isReleasedBy
 import com.nuvio.app.features.collection.CollectionRepository
 import com.nuvio.app.features.profiles.ProfileRepository
@@ -1574,13 +1574,23 @@ private suspend fun resolveHomeNextUpCandidate(
     }
 
     // The run decides only when it is the position the seed stage chose (the run outranked the
-    // canonical position there): the card then offers the episode after the one the user just
-    // rewatched. A run an older watch position outranks never reaches this call.
-    val runEpisode = rewatchRun?.let { run -> meta.episodeAfter(run.seasonNumber, run.episodeNumber) }
-    if (runEpisode != null && !showUnairedNextUp && !runEpisode.isReleasedBy(todayIsoDate)) {
+    // canonical position there): the card then offers the first step after the one the user just
+    // rewatched that may be shown, read by the same rule as the canonical position. A run an older
+    // watch position outranks never reaches this call.
+    val runStep = rewatchRun?.let { run ->
+        meta.offerableEpisodeAfterRun(
+            run = run,
+            showUnairedNextUp = showUnairedNextUp,
+            todayIsoDate = todayIsoDate,
+        )
+    }
+    if (runStep == null && rewatchRun != null && meta.hasEpisodeAfterRun(rewatchRun)) {
+        // Steps follow the run but none may be offered yet (an unaired one the user hides, or a
+        // next season too far out): the run ends here instead of falling back to a position the
+        // user has already finished.
         return HomeNextUpResolutionAttempt.conclusiveNone()
     }
-    val nextEpisode = runEpisode ?: run {
+    val nextEpisode = runStep ?: run {
         val action = meta.seriesPrimaryAction(
             content = completedEntry.content,
             entries = resolvedProgressEntries,
@@ -1630,6 +1640,57 @@ internal fun MetaDetails.episodeAfter(seasonNumber: Int, episodeNumber: Int): Me
         val episode = video.episode ?: return@firstOrNull false
         season > seasonNumber || (season == seasonNumber && episode > episodeNumber)
     }
+
+/**
+ * The first episode after the run that may be offered, decided the way the TV client decides the
+ * same step so the two agree about one episode: an aired step always, an unaired step only while
+ * the user allows unaired episodes, a step inside the run's own season with them allowed, and a
+ * step into the next season within the same seven day window the canonical position uses. A dated
+ * next-season step outside that window is skipped instead of ending the run.
+ */
+internal fun MetaDetails.offerableEpisodeAfterRun(
+    run: RewatchRunPosition,
+    showUnairedNextUp: Boolean,
+    todayIsoDate: String,
+): MetaVideo? = videos
+    .filter { video -> video.season != null && video.episode != null }
+    .sortedWith(compareBy({ video -> video.season ?: 0 }, { video -> video.episode ?: 0 }))
+    .firstOrNull { video ->
+        val season = video.season ?: return@firstOrNull false
+        val episode = video.episode ?: return@firstOrNull false
+        val afterRun = season > run.seasonNumber || (season == run.seasonNumber && episode > run.episodeNumber)
+        afterRun && video.isOfferableRunStep(
+            runSeasonNumber = run.seasonNumber,
+            showUnairedNextUp = showUnairedNextUp,
+            todayIsoDate = todayIsoDate,
+        )
+    }
+
+/** Whether the series carries any episode after the run, offerable or not. */
+internal fun MetaDetails.hasEpisodeAfterRun(run: RewatchRunPosition): Boolean = videos.any { video ->
+    val season = video.season ?: return@any false
+    val episode = video.episode ?: return@any false
+    season > run.seasonNumber || (season == run.seasonNumber && episode > run.episodeNumber)
+}
+
+/** The window a dated next-season step of a run may sit in, the same seven days the row uses. */
+private const val RUN_STEP_NEW_SEASON_WINDOW_DAYS = 7
+
+private fun MetaVideo.isOfferableRunStep(
+    runSeasonNumber: Int,
+    showUnairedNextUp: Boolean,
+    todayIsoDate: String,
+): Boolean {
+    val daysUntilRelease = daysUntilExplicitRelease(
+        todayIsoDate = todayIsoDate,
+        releasedDate = released,
+    )
+    if (daysUntilRelease != null && daysUntilRelease <= 0) return true
+    if (!showUnairedNextUp) return false
+    val stepSeason = season ?: return false
+    if (stepSeason == runSeasonNumber) return true
+    return daysUntilRelease == null || daysUntilRelease <= RUN_STEP_NEW_SEASON_WINDOW_DAYS
+}
 
 private fun MetaDetails.videoForSeriesAction(action: SeriesPrimaryAction): MetaVideo? {
     if (action.seasonNumber != null && action.episodeNumber != null) {
