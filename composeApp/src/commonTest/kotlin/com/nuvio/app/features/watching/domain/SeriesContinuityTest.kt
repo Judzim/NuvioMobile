@@ -36,7 +36,7 @@ class SeriesContinuityTest {
 
         assertNotNull(action)
         assertEquals("show:1:1", action.videoId)
-        assertEquals("Play S1 E1", action.label)
+        assertEquals("Watch again S1 E1", action.label)
         assertNull(action.resumePositionMs)
     }
 

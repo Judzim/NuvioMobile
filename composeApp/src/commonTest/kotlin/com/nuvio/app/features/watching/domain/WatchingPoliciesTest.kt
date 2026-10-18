@@ -25,16 +25,16 @@ class WatchingPoliciesTest {
         // marker is read one point early.
         assertFalse(
             isProgressComplete(
-                positionMs = 94_000L,
-                durationMs = 100_000L,
+                positionMs = 1_880_000L_
+                durationMs = 2_000_000L,
                 isEnded = false,
                 completionFraction = completionFractionFor(96.0),
             ),
         )
         assertTrue(
             isProgressComplete(
-                positionMs = 95_000L,
-                durationMs = 100_000L,
+                positionMs = 1_900_000L_
+                durationMs = 2_000_000L,
                 isEnded = false,
                 completionFraction = completionFractionFor(96.0),
             ),
@@ -43,15 +43,15 @@ class WatchingPoliciesTest {
         // Nothing known about the credits keeps the percentage the app has always used.
         assertFalse(
             isProgressComplete(
-                positionMs = 89_000L,
-                durationMs = 100_000L,
+                positionMs = 1_780_000L_
+                durationMs = 2_000_000L,
                 isEnded = false,
             ),
         )
         assertTrue(
             isProgressComplete(
-                positionMs = 90_000L,
-                durationMs = 100_000L,
+                positionMs = 1_800_000L_
+                durationMs = 2_000_000L,
                 isEnded = false,
             ),
         )
