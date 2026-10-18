@@ -742,8 +742,15 @@ fun HomeScreen(
                                     showUnairedNextUp = continueWatchingPreferences.showUnairedNextUp,
                                     dismissedNextUpKeys = continueWatchingPreferences.dismissedNextUpKeys,
                                     providerOwnsCompletedHistory = progressProviderOwnsCompletedHistory,
-                                    rewatchRun = simklRewatchRuns
-                                        .firstOrNull { run -> run.matches(completedEntry.content.id) },
+                                    // Only the run the seed stage kept decides the card: a run an
+                                    // older watch position outranks has already lost there, and the
+                                    // canonical position takes the card back. Without this gate the
+                                    // resolver followed any run the account held, however old it was.
+                                    rewatchRun = simklRewatchRuns.firstOrNull { run ->
+                                        run.matches(completedEntry.content.id) &&
+                                            run.seasonNumber == completedEntry.seasonNumber &&
+                                            run.episodeNumber == completedEntry.episodeNumber
+                                    },
                                 )
                             }
                         } catch (error: Throwable) {
@@ -1566,9 +1573,9 @@ private suspend fun resolveHomeNextUpCandidate(
         )
     }
 
-    // A rewatch run ignores the canonical position: the card offers the episode after the one the
-    // user just rewatched, even though the usual resolver would still point at the episode the
-    // series was left at before the run started.
+    // The run decides only when it is the position the seed stage chose (the run outranked the
+    // canonical position there): the card then offers the episode after the one the user just
+    // rewatched. A run an older watch position outranks never reaches this call.
     val runEpisode = rewatchRun?.let { run -> meta.episodeAfter(run.seasonNumber, run.episodeNumber) }
     if (runEpisode != null && !showUnairedNextUp && !runEpisode.isReleasedBy(todayIsoDate)) {
         return HomeNextUpResolutionAttempt.conclusiveNone()
