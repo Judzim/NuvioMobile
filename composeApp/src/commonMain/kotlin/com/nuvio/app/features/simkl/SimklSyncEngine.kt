@@ -9,11 +9,14 @@ internal class SimklSyncEngine(
 ) {
     private val log = Logger.withTag("SimklSync")
 
-    suspend fun synchronize(current: SimklSyncSnapshot): SimklSyncSnapshot {
+    suspend fun synchronize(
+        current: SimklSyncSnapshot,
+        forceRewatchRead: Boolean = false,
+    ): SimklSyncSnapshot {
         if (!current.isInitialized) return initialSync()
 
         val activities = remote.fetchActivities()
-        if (activities.all == current.watermark) {
+        if (activities.all == current.watermark && !forceRewatchRead) {
             return current.copy(
                 activities = activities,
                 lastCheckedAtEpochMs = nowEpochMs(),
@@ -85,6 +88,10 @@ internal class SimklSyncEngine(
      * Continue Watching cards the user is looking at.
      */
     private suspend fun readRewatchRuns(current: SimklSyncSnapshot?): SimklRewatchRead {
+        // Load the settings before the mode is read: the state flow starts at the default (Off), and
+        // a read taken mid-startup would report rewatches as off and drop the runs with them. The TV
+        // reads the mode from a DataStore flow, so it never sees the default.
+        TrackingSettingsRepository.ensureLoaded()
         val mode = TrackingSettingsRepository.uiState.value.simklRewatchMode
         val accountType = SimklAuthRepository.uiState.value.accountType
         if (mode == SimklRewatchMode.OFF || !isSimklRewatchPlanEligible(accountType)) {

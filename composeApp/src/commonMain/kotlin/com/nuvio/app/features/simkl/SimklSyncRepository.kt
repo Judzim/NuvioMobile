@@ -126,7 +126,7 @@ object SimklSyncRepository : TrackingProfileStore {
                 eligible
             },
         ) {
-            refreshSnapshot(requestedGeneration)
+            refreshSnapshot(requestedGeneration, forceRewatchRead = intent == TrackingRefreshIntent.USER_INITIATED)
         }
         SimklWatchDiagnostics.logRefreshCompletion(
             requestId = requestId,
@@ -144,13 +144,16 @@ object SimklSyncRepository : TrackingProfileStore {
             completed.errorMessage == null
     }
 
-    private suspend fun refreshSnapshot(generation: Long) = snapshotMutex.withLock {
+    private suspend fun refreshSnapshot(
+        generation: Long,
+        forceRewatchRead: Boolean = false,
+    ) = snapshotMutex.withLock {
         val profileId = ProfileRepository.activeProfileId
         val previous = _state.value
         _state.value = previous.copy(isLoading = true, errorMessage = null)
 
         val result = try {
-            engine.synchronize(previous.snapshot)
+            engine.synchronize(previous.snapshot, forceRewatchRead = forceRewatchRead)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {

@@ -1,11 +1,13 @@
 package com.nuvio.app.features.settings
 
 import com.nuvio.app.features.home.buildHomeNextUpSeedCandidates
+import com.nuvio.app.features.simkl.SimklAuthRepository
 import com.nuvio.app.features.simkl.SimklSyncRepository
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
 import com.nuvio.app.features.watchprogress.WatchProgressClock
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watched.WatchedRepository
+import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.watching.application.WatchingState
 
 /**
@@ -57,7 +59,10 @@ internal fun buildCwDebugReport(): String {
     out.appendLine("=== CW DEBUG REPORT ===")
     out.appendLine(
         "source=${progress.source} ownsHistory=$ownsHistory preferFurthest=${prefs.upNextFromFurthestEpisode} " +
-            "runs=${runs.size} watchedItems=${watchedItems.size} progressEntries=${progress.entries.size} now=$now",
+            "mode=${TrackingSettingsRepository.uiState.value.simklRewatchMode} " +
+            "runs=${runs.size} sessions=${SimklSyncRepository.state.value.snapshot.rewatchSessions.size} " +
+            "accountType=${SimklAuthRepository.uiState.value.accountType} " +
+            "watchedItems=${watchedItems.size} progressEntries=${progress.entries.size} now=$now",
     )
     out.appendLine()
     for ((index, seriesId) in seriesIds.withIndex()) {
