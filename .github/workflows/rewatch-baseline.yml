@@ -1,0 +1,65 @@
+name: Rewatch baseline tests
+
+# Runs the upstream test suite on a pristine checkout of the branch the rewatch work sits on, so a
+# failure list can be compared against the port. Fork-only, no APK, no release.
+
+on:
+  push:
+    branches:
+      - rewatch-baseline
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rewatch-baseline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Baseline unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Write runtime properties
+        env:
+          SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
+          SIMKL_APP_NAME: ${{ secrets.SIMKL_APP_NAME }}
+          SIMKL_REDIRECT_URI: ${{ secrets.SIMKL_REDIRECT_URI }}
+          NUVIO_SUPABASE_URL: ${{ secrets.NUVIO_SUPABASE_URL }}
+          NUVIO_SUPABASE_ANON_KEY: ${{ secrets.NUVIO_SUPABASE_ANON_KEY }}
+          NUVIO_SUPABASE_FALLBACK_URL: ${{ secrets.NUVIO_SUPABASE_FALLBACK_URL }}
+        run: |
+          printf '%s\n' \
+            "SIMKL_CLIENT_ID=${SIMKL_CLIENT_ID}" \
+            "SIMKL_APP_NAME=${SIMKL_APP_NAME}" \
+            "SIMKL_REDIRECT_URI=${SIMKL_REDIRECT_URI}" \
+            "NUVIO_SUPABASE_URL=${NUVIO_SUPABASE_URL}" \
+            "NUVIO_SUPABASE_ANON_KEY=${NUVIO_SUPABASE_ANON_KEY}" \
+            "NUVIO_SUPABASE_FALLBACK_URL=${NUVIO_SUPABASE_FALLBACK_URL}" \
+            > local.properties
+
+      - name: Unit tests
+        continue-on-error: true
+        run: ./gradlew :composeApp:testAndroidHostTest --continue --stacktrace
+
+      - name: Keep the test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: baseline-test-results
+          path: composeApp/build/test-results/testAndroidHostTest/*.xml
+          if-no-files-found: warn
