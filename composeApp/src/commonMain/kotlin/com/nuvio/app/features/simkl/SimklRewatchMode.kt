@@ -8,8 +8,11 @@ import com.nuvio.app.features.watching.domain.ContentEndTolerancePercent
  * How Nuvio records rewatches on Simkl.
  *
  * Simkl requires an explicit opt-in for rewatch bookkeeping, so the default is [OFF].
- * [AUTOMATIC] sends `allow_rewatch=yes` on every finished playback, [MANUAL] asks after the
- * playback instead and only writes when the user confirms.
+ * [AUTOMATIC] sends `allow_rewatch=yes` on every finished playback, [SEMI_AUTOMATIC] asks once
+ * before a playback that would open a run and records the rest of the run without asking.
+ *
+ * The mode only says how a run is started. A run the account holds is shown by Continue Watching
+ * while either of the two recording modes is on, and never while it is [OFF].
  */
 enum class SimklRewatchMode {
     OFF,
@@ -145,8 +148,11 @@ internal fun simklScrobbleQuery(
 }
 
 /**
- * Whether the scrobble call itself should carry `allow_rewatch=yes`. Only automatic mode does that,
- * because a confirmed rewatch is written after the fact through `/sync/history`.
+ * Whether the scrobble call itself should carry `allow_rewatch=yes`.
+ *
+ * [AUTOMATIC] asks for a rewatch on every finished playback. [SEMI_AUTOMATIC] does it only where
+ * the user said so: a run of the item is open on the account, or the question before the playback
+ * was answered with yes. A semi-automatic write is therefore never the client guessing at a run.
  */
 internal fun shouldRecordSimklRewatchOnStop(
     mode: SimklRewatchMode,
