@@ -146,10 +146,12 @@ internal fun LazyListScope.advancedSettingsContent(
                     description = if (diagnosticsCopied) "Copied to clipboard" else "Raw stored dates, rewatch runs and next-up results",
                     isTablet = isTablet,
                     onClick = {
-                        runCatching {
-                            diagnosticsClipboard.setText(AnnotatedString(buildCwDebugReport()))
+                        scope.launch {
+                            runCatching {
+                                diagnosticsClipboard.setText(AnnotatedString(buildCwDebugReport()))
+                            }
+                            diagnosticsCopied = true
                         }
-                        diagnosticsCopied = true
                     },
                 )
             }

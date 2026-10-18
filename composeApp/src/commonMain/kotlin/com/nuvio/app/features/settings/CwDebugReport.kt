@@ -16,7 +16,11 @@ import com.nuvio.app.features.watching.application.WatchingState
  * position before and after the runs were applied. Copied from Advanced settings; nothing in the
  * app reads this at runtime.
  */
-internal fun buildCwDebugReport(): String {
+internal suspend fun buildCwDebugReport(): String {
+    // The report has to say what the app runs with, so the stores it reads are loaded first: a
+    // report copied on a fresh start would otherwise print the defaults as if they were settings.
+    TrackingSettingsRepository.ensureLoaded()
+    SimklSyncRepository.ensureLoaded()
     val watched = WatchedRepository.uiState.value
     val progress = WatchProgressRepository.uiState.value
     val runs = SimklSyncRepository.state.value.snapshot.rewatchRuns
