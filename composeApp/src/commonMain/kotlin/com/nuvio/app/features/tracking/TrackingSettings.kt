@@ -46,11 +46,17 @@ object TrackingSettingsRepository {
     /**
      * How rewatches are recorded and offered. The runs on the Continue Watching row follow the mode
      * right away instead of at the next sync: the sessions the app already read are re-derived, and
-     * turning rewatches off drops the row's runs with them.
+     * turning rewatches off drops the row's runs with them. Turning them on also reads the account
+     * once in the background, because a snapshot that holds no sessions yet has nothing to re-derive
+     * and the row would otherwise wait for the next changed watermark.
      */
     suspend fun setSimklRewatchMode(mode: SimklRewatchMode) {
         TraktSettingsRepository.setSimklRewatchMode(mode)
         SimklSyncRepository.refreshRewatchRuns()
+        if (mode != SimklRewatchMode.OFF) {
+            // The same read the Sync now button forces, so the switch never needs one by hand.
+            SimklSyncRepository.refreshAsync(TrackingRefreshIntent.USER_INITIATED)
+        }
     }
 
     /** Where a Simkl playback counts as finished, in percent. */

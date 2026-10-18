@@ -1,6 +1,7 @@
 package com.nuvio.app.features.simkl
 
 import com.nuvio.app.features.addons.RawHttpResponse
+import com.nuvio.app.features.tracking.RewatchRunPosition
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -447,6 +448,62 @@ class SimklSyncEngineTest {
         val merged = mergeDelta(listOf(stale), responseOf(fresh))
 
         assertEquals(listOf(fresh), merged)
+    }
+
+    @Test
+    fun `a sync with rewatches off keeps the stored sessions and drops only the runs`() = runBlocking {
+        val session = entry(SimklMediaType.SHOWS, "900").copy(
+            isRewatch = true,
+            rewatchId = 7L,
+            rewatchStatus = "active",
+        )
+        val previousDomain = SimklActivityDomain(
+            all = "d1",
+            ratedAt = "rated1",
+            playback = "playback",
+            plantowatch = "plantowatch1",
+            watching = "watching1",
+            completed = "completed1",
+            hold = "hold1",
+            dropped = "dropped1",
+            removedFromList = "removed",
+        )
+        val current = SimklSyncSnapshot(
+            isInitialized = true,
+            watermark = "v1",
+            activities = SimklActivities(
+                all = "v1",
+                tvShows = previousDomain,
+                movies = previousDomain,
+                anime = previousDomain,
+            ),
+            entries = listOf(entry(SimklMediaType.SHOWS, "10")),
+            rewatchSessions = listOf(session),
+            rewatchRuns = listOf(
+                RewatchRunPosition(
+                    contentId = "10",
+                    seasonNumber = 1,
+                    episodeNumber = 2,
+                    markedAtEpochMs = 1L,
+                ),
+            ),
+        )
+        val remote = ScriptedRemote(
+            Step.Activities(
+                SimklActivities(
+                    all = "v2",
+                    tvShows = previousDomain.copy(all = "d2"),
+                    movies = previousDomain,
+                    anime = previousDomain,
+                ),
+            ),
+            Step.AllItems(null, SimklAllItemsResponse()),
+        )
+
+        val synced = SimklSyncEngine(remote) { 900L }.synchronize(current)
+
+        assertEquals(emptyList<RewatchRunPosition>(), synced.rewatchRuns)
+        assertEquals(listOf(session), synced.rewatchSessions)
     }
 
     private sealed interface Step {
