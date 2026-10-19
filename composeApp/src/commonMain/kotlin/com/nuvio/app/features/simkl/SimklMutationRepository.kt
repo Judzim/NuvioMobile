@@ -259,9 +259,7 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             // so waiting for that read would keep the card up for the whole settle window (the
             // reads sit 3, 10 and 25 seconds apart). The read below still runs and replaces this
             // with whatever the account reports.
-            SimklSyncRepository.adoptRewatchSessions(
-                snapshot.rewatchSessions.filterNot { session -> session.rewatchId == sessionId },
-            )
+            SimklSyncRepository.dropRewatchSession(sessionId)
         }
         // The sessions are read back in the background: Continue Watching follows the session list,
         // so the run leaves the row once the read sees the new state.
@@ -395,11 +393,16 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
      */
     private fun refreshRewatchSessions(settled: (List<SimklLibraryEntry>) -> Boolean) {
         scope.launch {
+            // The read is paired with the sync watermark, so it carries the items changed since
+            // the last sync, the write this waits for among them once Simkl publishes it. Every
+            // pass of the loop reads the same window on purpose: a narrower one would skip a
+            // change that was published between two reads.
+            val dateFrom = SimklSyncRepository.state.value.snapshot.watermark
             var lastRead: List<SimklLibraryEntry>? = null
             var settledSeen = false
             for (waitMs in SIMKL_REWATCH_SESSION_READ_DELAYS_MS) {
                 delay(waitMs)
-                val sessions = runCatching { remote.fetchRewatchSessions() }
+                val sessions = runCatching { remote.fetchRewatchSessions(dateFrom) }
                     .onFailure { error ->
                         log.w { "Could not read the rewatch sessions back: ${error.message}" }
                     }

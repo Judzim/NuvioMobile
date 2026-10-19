@@ -251,7 +251,26 @@ object SimklSyncRepository : TrackingProfileStore {
         // The preferences are read through the load, never through their defaults: the flow starts
         // at Off, and a derivation taken before the load would drop the runs it is handed.
         ensureLoaded()
-        val runningSessions = sessions.runningRewatchSessions()
+        // What the caller read is a delta outside the initial sync (it was paired with the sync
+        // watermark): it carries the changed items only, so merging it keeps the sessions of the
+        // items it did not mention. A full read merges the same way: it mentions every item, which
+        // makes the read the whole set again.
+        val merged = mergeRewatchSessions(sessions, _state.value.snapshot.rewatchSessions)
+        persistRewatchSessions(merged)
+    }
+
+    /**
+     * Drops a session the app itself closed, so the row follows at once instead of at the settle
+     * read. The read-back still replaces this with whatever the account reports.
+     */
+    internal suspend fun dropRewatchSession(sessionId: Long) {
+        ensureLoaded()
+        val remaining = _state.value.snapshot.rewatchSessions
+            .filterNot { session -> session.rewatchId == sessionId }
+        persistRewatchSessions(remaining)
+    }
+
+    private suspend fun persistRewatchSessions(runningSessions: List<SimklLibraryEntry>) {
         val runs = runCatching {
             deriveSimklRewatchRuns(
                 entries = runningSessions,

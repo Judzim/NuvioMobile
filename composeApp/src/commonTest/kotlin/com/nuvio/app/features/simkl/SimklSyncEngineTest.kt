@@ -388,6 +388,8 @@ class SimklSyncEngineTest {
         remote.fetchAllItems(SimklAllItemsRequest.Bootstrap(SimklMediaType.SHOWS))
         remote.fetchAllItems(SimklAllItemsRequest.Changes("2026-05-08T14:23:11Z"))
         remote.fetchAllItems(SimklAllItemsRequest.CurrentIds)
+        remote.fetchRewatchSessions("2026-05-08T14:23:11Z")
+        remote.fetchRewatchSessions(null)
 
         assertFalse("date_from=" in urls[0])
         assertTrue("extended=full" in urls[0])
@@ -400,6 +402,15 @@ class SimklSyncEngineTest {
         assertTrue("episode_tvdb_id=yes" in urls[1])
         assertTrue("include_all_episodes=yes" in urls[1])
         assertTrue("extended=simkl_ids_only" in urls[2])
+        assertTrue("/shows" in urls[3])
+        assertTrue("allow_rewatch=yes" in urls[3])
+        assertTrue("date_from=2026-05-08T14%3A23%3A11Z" in urls[3])
+        assertTrue("/anime" in urls[4])
+        assertTrue("date_from=2026-05-08T14%3A23%3A11Z" in urls[4])
+        assertTrue("allow_rewatch=yes" in urls[5])
+        assertFalse("date_from=" in urls[5])
+        assertTrue("allow_rewatch=yes" in urls[6])
+        assertFalse("date_from=" in urls[6])
     }
 
     @Test
@@ -544,7 +555,7 @@ class SimklSyncEngineTest {
         }
 
         /** The rewatch read stays out of the scripted order: it only consumes a step when one fits. */
-        override suspend fun fetchRewatchSessions(): List<SimklLibraryEntry> {
+        override suspend fun fetchRewatchSessions(dateFrom: String?): List<SimklLibraryEntry> {
             val step = remaining.firstOrNull() ?: return emptyList()
             if (step !is Step.RewatchSessions) return emptyList()
             remaining.removeAt(0)

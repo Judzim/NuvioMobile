@@ -267,6 +267,57 @@ class SimklRewatchRunsTest {
         )
     }
 
+    @Test
+    fun `a dated read replaces the rows of the items it mentions and keeps the rest`() {
+        val storedDark = session(id = 1, status = "active")
+        val storedOther = session(id = 2, status = "active", ids = otherIds)
+        val readDarkCanonical = rewatchRow(rewatched = listOf(Marked(season = 2, episode = 7)), isRewatch = false)
+        val readDarkClosed = session(id = 1, status = "closed")
+        val readNewSession = session(id = 3, status = "active", ids = newIds)
+
+        val merged = mergeRewatchSessions(
+            read = listOf(readDarkCanonical, readDarkClosed, readNewSession),
+            stored = listOf(storedDark, storedOther),
+        )
+
+        // Dark changed (the session closed), the new show joined, and the untouched item held on.
+        assertEquals(listOf(3L, 2L), merged.mapNotNull(SimklLibraryEntry::rewatchId))
+        assertEquals("shows:simkl:39688", merged.first().stableKey())
+    }
+
+    @Test
+    fun `a delta that mentions an item without a running session drops the stored session`() {
+        val merged = mergeRewatchSessions(
+            read = listOf(rewatchRow(rewatched = listOf(Marked(season = 2, episode = 7)), isRewatch = false)),
+            stored = listOf(session(id = 1, status = "active")),
+        )
+
+        assertTrue(merged.isEmpty())
+    }
+
+    @Test
+    fun `a read that mentions every item replaces the whole stored set`() {
+        val merged = mergeRewatchSessions(
+            read = listOf(
+                session(id = 1, status = "active"),
+                rewatchRow(rewatched = listOf(Marked(season = 2, episode = 7)), isRewatch = false, ids = otherIds),
+            ),
+            stored = listOf(
+                session(id = 1, status = "active"),
+                session(id = 2, status = "active", ids = otherIds),
+            ),
+        )
+
+        assertEquals(listOf(1L), merged.mapNotNull(SimklLibraryEntry::rewatchId))
+    }
+
+    /** A second show, and a third one, so a read can mention items the stored set does not. */
+    private val otherIds: Map<String, JsonElement>
+        get() = mapOf("simkl" to jsonValue("39690"), "imdb" to jsonValue("tt039690"))
+
+    private val newIds: Map<String, JsonElement>
+        get() = mapOf("simkl" to jsonValue("39688"), "imdb" to jsonValue("tt039688"))
+
     private fun runsFor(
         offerRuns: Boolean,
         rewatched: List<Marked>,
@@ -280,6 +331,7 @@ class SimklRewatchRunsTest {
         rewatched: List<Marked>,
         isRewatch: Boolean,
         status: String? = "active",
+        ids: Map<String, JsonElement> = mapOf("simkl" to jsonValue("39687"), "imdb" to jsonValue("tt5753856")),
     ): SimklLibraryEntry = SimklLibraryEntry(
         mediaType = SimklMediaType.SHOWS,
         status = SimklListStatus.COMPLETED,
@@ -287,7 +339,7 @@ class SimklRewatchRunsTest {
         show = SimklMedia(
             title = "Dark",
             year = 2017,
-            ids = mapOf("simkl" to jsonValue("39687"), "imdb" to jsonValue("tt5753856")),
+            ids = ids,
         ),
         seasons = rewatched
             .groupBy(Marked::season)

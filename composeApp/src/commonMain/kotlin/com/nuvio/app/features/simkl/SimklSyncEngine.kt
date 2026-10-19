@@ -42,7 +42,7 @@ internal class SimklSyncEngine(
         }
 
         val now = nowEpochMs()
-        val rewatch = readRewatchRuns(current)
+        val rewatch = readRewatchRuns(current, forceRewatchRead = forceRewatchRead)
         return current.copy(
             watermark = activities.all,
             activities = activities,
@@ -67,7 +67,7 @@ internal class SimklSyncEngine(
         val playback = remote.fetchPlayback()
         val activities = remote.fetchActivities()
         val now = nowEpochMs()
-        val rewatch = readRewatchRuns(current = null)
+        val rewatch = readRewatchRuns(current = null, forceRewatchRead = false)
         return SimklSyncSnapshot(
             isInitialized = true,
             watermark = activities.all,
@@ -87,7 +87,10 @@ internal class SimklSyncEngine(
      * A failed read keeps what the previous sync found: losing the network must not empty the
      * Continue Watching cards the user is looking at.
      */
-    private suspend fun readRewatchRuns(current: SimklSyncSnapshot?): SimklRewatchRead {
+    private suspend fun readRewatchRuns(
+        current: SimklSyncSnapshot?,
+        forceRewatchRead: Boolean,
+    ): SimklRewatchRead {
         // Load the settings before the mode is read: the state flow starts at the default (Off), and
         // a read taken mid-startup would report rewatches as off and drop the runs with them. The TV
         // reads the mode from a DataStore flow, so it never sees the default.
@@ -111,8 +114,20 @@ internal class SimklSyncEngine(
                 )
             }
         }
+        // The guide's rule: every read outside the initial sync pairs date_from, so the server
+        // returns the changed slice instead of the whole library. That slice mentions only the
+        // items that changed, and the runs need every session the account holds, so it is merged
+        // into the sessions already on the snapshot. The unpaired full read stays for the initial
+        // sync, and for the recovery a Sync now can ask for while there is no session to merge
+        // into (a snapshot that never read, or one a wipe left empty).
+        val dateFrom = if (current == null || (forceRewatchRead && current.rewatchSessions.isEmpty())) {
+            null
+        } else {
+            current.watermark
+        }
         return runCatching {
-            val sessions = remote.fetchRewatchSessions().runningRewatchSessions()
+            val read = remote.fetchRewatchSessions(dateFrom)
+            val sessions = mergeRewatchSessions(read, current?.rewatchSessions.orEmpty())
             SimklRewatchRead(
                 runs = deriveSimklRewatchRuns(
                     entries = sessions,
