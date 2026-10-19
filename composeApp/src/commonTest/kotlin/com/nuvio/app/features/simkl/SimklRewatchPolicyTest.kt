@@ -48,6 +48,29 @@ class SimklRewatchPolicyTest {
     }
 
     @Test
+    fun `a mark is written as a repeat only while the mode and the plan allow it`() {
+        assertFalse(shouldRecordSimklRewatchOnMark(SimklRewatchMode.OFF, "pro", isRepeatViewing = true))
+        assertFalse(shouldRecordSimklRewatchOnMark(SimklRewatchMode.AUTOMATIC, "free", isRepeatViewing = true))
+        assertFalse(shouldRecordSimklRewatchOnMark(SimklRewatchMode.AUTOMATIC, null, isRepeatViewing = true))
+        assertTrue(shouldRecordSimklRewatchOnMark(SimklRewatchMode.AUTOMATIC, "pro", isRepeatViewing = true))
+        assertTrue(shouldRecordSimklRewatchOnMark(SimklRewatchMode.SEMI_AUTOMATIC, "vip", isRepeatViewing = true))
+
+        // A mark of something the account has never watched is a first watch, whatever the mode says,
+        // because there is nothing to repeat.
+        assertFalse(shouldRecordSimklRewatchOnMark(SimklRewatchMode.AUTOMATIC, "pro", isRepeatViewing = false))
+
+        // A run the account already holds makes the mark part of it either way.
+        assertTrue(
+            shouldRecordSimklRewatchOnMark(
+                mode = SimklRewatchMode.AUTOMATIC,
+                accountType = "pro",
+                isRepeatViewing = false,
+                hasRunningSession = true,
+            ),
+        )
+    }
+
+    @Test
     fun `only a finished stop carries the flag`() {
         assertFalse(record(SimklRewatchMode.AUTOMATIC, "pro", action = TrackingScrobbleAction.PAUSE))
         assertFalse(record(SimklRewatchMode.AUTOMATIC, "pro", action = TrackingScrobbleAction.START))

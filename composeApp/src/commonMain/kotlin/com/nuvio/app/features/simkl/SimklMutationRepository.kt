@@ -74,18 +74,22 @@ internal class SimklMutationService(
             }
         }
         if (candidates.isEmpty()) return TrackingMutationResult(attemptedCount = 0)
+        // The request asks for rewatch recording when any item says it is a repeat viewing: that is the
+        // query flag, and Simkl reads the whole request through its rewatch logic with it. Without it a
+        // mark of something already watched is answered as a plain add and recorded as nothing at all.
+        val recordRewatch = allowRewatch || candidates.any(TrackingHistoryItem::isRewatch)
         val body = buildSimklHistoryMutationBody(candidates, isRewatch = allowRewatch, json = json)
         val response = client.execute(
             SimklApiRequest(
                 method = SimklHttpMethod.POST,
                 path = "/sync/history",
-                query = if (allowRewatch) SIMKL_ALLOW_REWATCH_QUERY else emptyMap(),
+                query = if (recordRewatch) SIMKL_ALLOW_REWATCH_QUERY else emptyMap(),
                 body = body,
                 retryPolicy = SimklRetryPolicy.SYNC_WRITE,
                 // A repeat viewing of an episode the history already holds is the same shape of call as
                 // a stop scrobble, and Simkl answers both with a conflict that means the session is
                 // there. Reading it as a failure is what made a recorded rewatch report an error.
-                scrobbleStopConflictIsSuccess = allowRewatch,
+                scrobbleStopConflictIsSuccess = recordRewatch,
             ),
         )
         val receipt = response.toHistoryMutationReceipt(candidates, json)
@@ -217,16 +221,42 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         return service.removeFromList(items)
     }
 
+    /**
+     * Writes the manual marks (the episode menu, a season action, a library action) to the account.
+     *
+     * A mark of something the account has already watched is a repeat viewing, and Simkl records a
+     * plain add of it as nothing at all, so such a mark travels as a rewatch: the item carries the
+     * flag, the request carries `allow_rewatch=yes`, and a run the account already holds is pinned by
+     * its session id, so the mark joins that run instead of opening another. Whether a mark is a
+     * repeat is asked of the account's own history, and the flag only travels while the rewatch mode
+     * and the plan allow it, the same gates the scrobble path uses: Simkl drops a write carrying the
+     * flag for a free account silently, and the watch would be dropped with it.
+     */
     override suspend fun addToHistory(
         profileId: Int,
         items: Collection<TrackingHistoryItem>,
     ): TrackingMutationResult {
         if (!isActiveProfile(profileId)) return TrackingMutationResult(attemptedCount = 0)
         SimklSyncRepository.ensureLoaded()
+        TrackingSettingsRepository.ensureLoaded()
         val snapshot = SimklSyncRepository.state.value.snapshot
+        val mode = TrackingSettingsRepository.uiState.value.simklRewatchMode
+        val accountType = SimklAuthRepository.uiState.value.accountType
         val resolved = items.map { item ->
-            val enriched = snapshot.enrichMediaReference(item.media)
-            item.copy(media = enriched.resolveAnimeEpisodeForSimkl())
+            val enriched = snapshot.enrichMediaReference(item.media).resolveAnimeEpisodeForSimkl()
+            val runningSessionId = snapshot.rewatchSessions.activeRewatchSessionId(enriched)
+            if (
+                shouldRecordSimklRewatchOnMark(
+                    mode = mode,
+                    accountType = accountType,
+                    isRepeatViewing = snapshot.entries.hasWatchedTitle(enriched),
+                    hasRunningSession = runningSessionId != null,
+                )
+            ) {
+                item.copy(media = enriched, isRewatch = true, rewatchId = runningSessionId)
+            } else {
+                item.copy(media = enriched)
+            }
         }
         return service.addToHistory(resolved)
     }
@@ -532,7 +562,8 @@ private fun buildHistoryRequest(
             item.media.toHistoryItemDto(
                 watchedAtEpochMs = item.watchedAtEpochMs.takeIf { includeWatchedAt },
                 includeWatchedAt = includeWatchedAt,
-                isRewatch = isRewatch,
+                isRewatch = item.isRewatch || isRewatch,
+                rewatchId = item.rewatchId,
             )
         }
     val shows = items
@@ -546,16 +577,22 @@ private fun buildHistoryRequest(
 private fun buildShowHistoryItem(
     items: List<TrackingHistoryItem>,
     includeWatchedAt: Boolean,
-    isRewatch: Boolean,
+    requestRewatch: Boolean,
 ): SimklHistoryItemDto {
     val first = items.first()
     val parentMutation = items.lastOrNull { item -> item.media.episode == null }
+    // The session and the flag travel on the item itself: a mark that is a repeat viewing names the
+    // run it joins, and a caller that marks the whole request marks every item of it.
+    val mutation = parentMutation ?: first
+    val rewatchId = mutation.rewatchId
+    val isRewatch = mutation.isRewatch || requestRewatch
     if (parentMutation != null) {
         return parentMutation.media.toHistoryItemDto(
             watchedAtEpochMs = parentMutation.watchedAtEpochMs.takeIf { includeWatchedAt },
             includeWatchedAt = includeWatchedAt,
             status = if (includeWatchedAt) TrackingListStatus.COMPLETED.wireValue else null,
             isRewatch = isRewatch,
+            rewatchId = rewatchId,
         )
     }
 
@@ -598,6 +635,7 @@ private fun buildShowHistoryItem(
         seasons = seasons,
         useTvdbAnimeSeasons = first.media.kind == TrackingMediaKind.ANIME && seasons.isNotEmpty(),
         isRewatch = isRewatch,
+        rewatchId = rewatchId,
     )
 }
 

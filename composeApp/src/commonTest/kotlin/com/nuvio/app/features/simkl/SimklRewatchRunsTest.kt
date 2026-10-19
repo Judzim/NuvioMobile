@@ -318,6 +318,51 @@ class SimklRewatchRunsTest {
     private val newIds: Map<String, JsonElement>
         get() = mapOf("simkl" to jsonValue("39688"), "imdb" to jsonValue("tt039688"))
 
+    private val darkIds: Map<String, JsonElement> = mapOf(
+        "simkl" to jsonValue("39687"),
+        "imdb" to jsonValue("tt5753856"),
+    )
+
+    @Test
+    fun `only a title the account has watched reads as a possible repeat`() {
+        val watchedByStatus = SimklLibraryEntry(
+            mediaType = SimklMediaType.SHOWS,
+            status = SimklListStatus.COMPLETED,
+            show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
+        )
+        val watchedByEpisode = SimklLibraryEntry(
+            mediaType = SimklMediaType.SHOWS,
+            show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
+            seasons = listOf(
+                SimklSeason(number = 2, episodes = listOf(SimklEpisode(number = 7, watchedAt = OLD))),
+            ),
+        )
+        val watchedOnlyByTheRowDate = SimklLibraryEntry(
+            mediaType = SimklMediaType.SHOWS,
+            lastWatchedAt = OLD,
+            show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
+        )
+        val neverWatched = SimklLibraryEntry(
+            mediaType = SimklMediaType.SHOWS,
+            show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
+        )
+        val anotherShow = SimklLibraryEntry(
+            mediaType = SimklMediaType.SHOWS,
+            status = SimklListStatus.COMPLETED,
+            show = SimklMedia(
+                title = "Something else",
+                year = 2001,
+                ids = mapOf("imdb" to jsonValue("tt0000001")),
+            ),
+        )
+
+        assertTrue(listOf(watchedByStatus).hasWatchedTitle(episode()))
+        assertTrue(listOf(watchedByEpisode).hasWatchedTitle(episode()))
+        assertTrue(listOf(watchedOnlyByTheRowDate).hasWatchedTitle(episode()))
+        assertFalse(listOf(neverWatched).hasWatchedTitle(episode()))
+        assertFalse(listOf(anotherShow).hasWatchedTitle(episode()))
+    }
+
     private fun runsFor(
         offerRuns: Boolean,
         rewatched: List<Marked>,

@@ -27,6 +27,21 @@ enum class TrackingSeekScrobblePolicy {
 data class TrackingHistoryItem(
     val media: TrackingMediaReference,
     val watchedAtEpochMs: Long? = null,
+    /**
+     * The run of this item a repeat viewing joins, when the account already holds one.
+     *
+     * Simkl keeps a rewatch of an item in a session, and two writes of the same episode without a pin
+     * split it into two runs. Providers without the concept leave it unset and it is then never sent.
+     */
+    val rewatchId: Long? = null,
+    /**
+     * Whether this write records a repeat viewing rather than a first watch.
+     *
+     * Simkl records a plain add of something the account has already watched as nothing at all, so a
+     * mark that is a repeat has to say so for the account to book it: the write then joins the run of
+     * the item, or opens one. Providers without the concept leave it unset and nothing is sent.
+     */
+    val isRewatch: Boolean = false,
 )
 
 data class TrackingScrobbleEvent(
@@ -57,6 +72,8 @@ data class TrackingMutationResolution(
     val listStatus: TrackingListStatus? = null,
     val mediaKind: TrackingMediaKind? = null,
     val providerSubtype: String? = null,
+    /** What the account did with a write that asked for a repeat viewing, when it reports one. */
+    val rewatchStatus: String? = null,
 )
 
 interface TrackingListWriter {
