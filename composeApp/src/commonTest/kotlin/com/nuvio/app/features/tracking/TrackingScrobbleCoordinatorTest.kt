@@ -57,7 +57,7 @@ class TrackingScrobbleCoordinatorTest {
 
     @Test
     fun `a sessionless event reaches only the scrobblers that take it`() = runBlocking {
-        val simkl = FakeScrobbler(TrackingProviderId.SIMKL, acceptsSessionless = true)
+        val simkl = FakeScrobbler(TrackingProviderId.SIMKL, acceptsSessionlessScrobbles = true)
         val trakt = FakeScrobbler(TrackingProviderId.TRAKT)
         val event = TrackingScrobbleEvent(
             media = TrackingMediaReference(
