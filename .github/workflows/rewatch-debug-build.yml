@@ -65,6 +65,7 @@ jobs:
         run: ./gradlew :composeApp:compileAndroidHostTest --stacktrace
 
       - name: Unit tests
+        id: tests
         # The port is still being verified; a failing test must not hold back the report or the
         # APK, so the run keeps going and the reports travel as an artifact below.
         continue-on-error: true
@@ -151,3 +152,12 @@ jobs:
           name: rewatch-playstore-release
           path: androidApp/build/outputs/apk/playstore/release/*.apk
           if-no-files-found: error
+
+      - name: Fail the run when the tests failed
+        # The unit tests above are allowed to fail, so that their report and the APK are still
+        # produced; the side effect was that a red suite looked like a green run. This step reads the
+        # step's real outcome back, so the run turns red while everything it built is still uploaded.
+        if: always() && steps.tests.outcome == 'failure'
+        run: |
+          echo "The unit tests failed: read the summary above and the test artifact."
+          exit 1
