@@ -4,6 +4,7 @@ import co.touchlab.kermit.Logger
 import com.nuvio.app.core.build.AppVersionConfig
 import com.nuvio.app.features.addons.httpRequestRaw
 import com.nuvio.app.features.profiles.ProfileRepository
+import com.nuvio.app.features.tracking.TRACKING_COMPLETION_BAR_PERCENT
 import com.nuvio.app.features.tracking.TrackingMediaKind
 import com.nuvio.app.features.tracking.TrackingMediaReference
 import com.nuvio.app.features.tracking.TrackingProviderId
@@ -112,6 +113,18 @@ internal object TraktScrobbleRepository : TrackingScrobbler {
         action: TrackingScrobbleAction,
         event: TrackingScrobbleEvent,
     ) {
+        /*
+         * A playback that resumes above the completion bar is not a new viewing here. The player
+         * sends the start for the trackers that report a "watching now" state, and this one skips
+         * it: Trakt would otherwise record the same watch twice, once through the start and once
+         * through the stop that ends the playback.
+         */
+        if (
+            action == TrackingScrobbleAction.START &&
+            event.progressPercent >= TRACKING_COMPLETION_BAR_PERCENT
+        ) {
+            return
+        }
         val item = buildItem(event.media) ?: return
         sendScrobble(
             profileId = profileId,

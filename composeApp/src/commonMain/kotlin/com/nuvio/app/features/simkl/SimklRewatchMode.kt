@@ -1,5 +1,6 @@
 package com.nuvio.app.features.simkl
 
+import com.nuvio.app.features.tracking.TRACKING_COMPLETION_BAR_PERCENT
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
 
@@ -236,8 +237,14 @@ internal fun shouldAskToStartSimklRewatch(
     priorWatch: SimklPriorWatch,
     nowEpochMs: Long,
     hasRunningSession: Boolean,
+    progressPercent: Double = 0.0,
 ): Boolean {
     if (mode != SimklRewatchMode.SEMI_AUTOMATIC) return false
+    // A start the player sends above the completion bar says that a playback that was already under
+    // way is running again, not that a viewing is beginning: the question belongs before a playback,
+    // and this one was asked when it began. The trackers still hear about the playback, which is why
+    // the start itself travels.
+    if (progressPercent >= TRACKING_COMPLETION_BAR_PERCENT) return false
     if (!isSimklRewatchPlanEligible(accountType)) return false
     if (action != TrackingScrobbleAction.START) return false
     if (hasRunningSession) return false

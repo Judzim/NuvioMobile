@@ -48,6 +48,29 @@ class SimklRewatchPolicyTest {
     }
 
     @Test
+    fun `a playback that begins above the completion bar is not asked about`() {
+        val nowEpochMs = 10_000_000_000L
+        val watchedLongAgo = SimklPriorWatch(
+            wasWatched = true,
+            watchedAtEpochMs = nowEpochMs - SIMKL_REWATCH_MIN_GAP_MS - 1L,
+        )
+        val asks = { progressPercent: Double ->
+            shouldAskToStartSimklRewatch(
+                mode = SimklRewatchMode.SEMI_AUTOMATIC,
+                accountType = "pro",
+                action = TrackingScrobbleAction.START,
+                priorWatch = watchedLongAgo,
+                nowEpochMs = nowEpochMs,
+                hasRunningSession = false,
+                progressPercent = progressPercent,
+            )
+        }
+
+        assertTrue(asks(0.0))
+        assertFalse(asks(90.0))
+    }
+
+    @Test
     fun `a mark is written as a repeat only while the mode and the plan allow it`() {
         assertFalse(shouldRecordSimklRewatchOnMark(SimklRewatchMode.OFF, "pro", isRepeatViewing = true))
         assertFalse(shouldRecordSimklRewatchOnMark(SimklRewatchMode.AUTOMATIC, "free", isRepeatViewing = true))

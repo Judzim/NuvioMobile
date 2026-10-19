@@ -1,5 +1,16 @@
 package com.nuvio.app.features.tracking
 
+/**
+ * Where a playback counts as already past the point the trackers report a completion at.
+ *
+ * One number for two sides that have to agree on it: the player, which reports a finished playback
+ * from here up, and each provider, which decides for itself what a start sent above it means. Trakt
+ * treats such a start as the beginning of a viewing, and the stop that follows would record the watch
+ * twice, so its scrobbler skips the start; a tracker whose "watching now" state is its own wants to
+ * hear about the playback anyway.
+ */
+internal const val TRACKING_COMPLETION_BAR_PERCENT = 80.0
+
 enum class TrackingListStatus(val wireValue: String) {
     WATCHING("watching"),
     PLAN_TO_WATCH("plantowatch"),
@@ -54,6 +65,17 @@ data class TrackingScrobbleEvent(
      * than that. Null means no marker is known for this item, and the percentage decides on its own.
      */
     val contentEndPercent: Double? = null,
+    /**
+     * A scrobble of a playback no session owns, for the trackers that keep a watching state of
+     * their own.
+     *
+     * A playback that sits above the completion bar never arms the pause and stop policy, so the
+     * events it produces belong to no session. Simkl wants them anyway; for Trakt a pause is a stop,
+     * and a stop above the bar records a watch, so such an event would write a viewing that never
+     * happened. The player marks them and the coordinator leaves out the scrobblers that do not
+     * accept them (see [TrackingScrobbler.acceptsSessionlessScrobbles]).
+     */
+    val sessionless: Boolean = false,
 )
 
 data class TrackingMutationResult(
@@ -115,4 +137,14 @@ interface TrackingScrobbler {
         action: TrackingScrobbleAction,
         event: TrackingScrobbleEvent,
     )
+
+    /**
+     * Whether a scrobble of a playback no session owns is welcome here.
+     *
+     * Off by default. For Trakt a pause is a stop and a stop above the completion bar records a
+     * watch, so a sessionless pause or stop would write a viewing the user never finished. A tracker
+     * that keeps its own "watching now" state, such as Simkl, turns it on.
+     */
+    val acceptsSessionlessScrobbles: Boolean
+        get() = false
 }

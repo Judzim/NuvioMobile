@@ -6,6 +6,7 @@ import com.nuvio.app.features.player.skip.ContentEndToleranceSeconds
 import com.nuvio.app.features.player.skip.contentEndPercent
 import com.nuvio.app.features.player.skip.contentEndWithTolerance
 import com.nuvio.app.features.tmdb.TmdbService
+import com.nuvio.app.features.tracking.TRACKING_COMPLETION_BAR_PERCENT
 import com.nuvio.app.features.tracking.TrackingMediaReference
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.tracking.TrackingScrobbleCoordinator
@@ -155,6 +156,7 @@ internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
     if (lastResetVideoIdentity != videoIdentity) {
         lastResetVideoIdentity = videoIdentity
         hasRequestedScrobbleStartForCurrentItem = false
+        hasSentStartAboveCompletionBarForCurrentItem = false
         scrobbleStartRequestGeneration = 0L
         pendingSeekScrobbleRestart = false
         hasSentCompletionScrobbleForCurrentItem = false
@@ -214,6 +216,19 @@ internal fun PlayerScreenRuntime.currentTrackingMedia(): TrackingMediaReference 
 
 internal fun PlayerScreenRuntime.emitTrackingScrobbleStart() {
     if (isShortPlaceholderDuration(playbackSnapshot.durationMs)) return
+    val currentProgress = currentPlaybackProgressPercent()
+    /*
+     * A playback that begins above the completion bar gets its start too, so the trackers that show
+     * the user as watching can report it. That start opens nothing here, and Trakt skips it on its
+     * own side, where a start and the stop that follows would record the same viewing twice.
+     */
+    if (currentProgress >= TRACKING_COMPLETION_BAR_PERCENT.toFloat()) {
+        emitTrackingScrobbleStartAboveCompletionBar(currentProgress)
+        return
+    }
+    // Under the bar again (a fresh playback, or one seeked back): the session below owns the item,
+    // and a start already sent above the bar does not stand in its way.
+    hasSentStartAboveCompletionBarForCurrentItem = false
     if (hasRequestedScrobbleStartForCurrentItem) return
     hasRequestedScrobbleStartForCurrentItem = true
     val requestGeneration = scrobbleStartRequestGeneration + 1L
@@ -241,6 +256,43 @@ internal fun PlayerScreenRuntime.emitTrackingScrobbleStart() {
     }
 }
 
+/*
+ * The start of a playback that begins above the completion bar.
+ *
+ * The trackers that keep a "watching now" state of their own want to hear about the playback whatever
+ * position it starts from, so the start goes out here instead of being dropped. It opens nothing
+ * locally: it never arms the pause and stop policy, which is what keeps every other event exactly as
+ * it is for a playback that was already past the bar. The provider that cannot take such a start,
+ * Trakt, skips it in its own scrobbler.
+ *
+ * One start per playback stretch: the pause that ends it clears the mark, so the resume after the
+ * pause reports the watching state again, and a seek back under the bar hands the item to the path
+ * above.
+ */
+private fun PlayerScreenRuntime.emitTrackingScrobbleStartAboveCompletionBar(progressPercent: Float) {
+    if (!shouldSendStartAboveCompletionBar(hasSentStartAboveCompletionBarForCurrentItem, progressPercent)) {
+        return
+    }
+    hasSentStartAboveCompletionBarForCurrentItem = true
+    val media = currentTrackingMedia()
+    if (!media.hasResolvableIdentity) {
+        hasSentStartAboveCompletionBarForCurrentItem = false
+        return
+    }
+    currentTrackingMedia = media
+    scope.launch {
+        TrackingScrobbleCoordinator.scrobble(
+            profileId = profileId,
+            action = TrackingScrobbleAction.START,
+            event = TrackingScrobbleEvent(
+                media = media,
+                progressPercent = progressPercent.toDouble(),
+                sessionless = true,
+            ),
+        )
+    }
+}
+
 internal fun PlayerScreenRuntime.emitTrackingScrobblePause(progressPercent: Float? = null) {
     emitTrackingScrobbleTerminal(
         action = TrackingScrobbleAction.PAUSE,
@@ -260,10 +312,34 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
     progressPercent: Float?,
 ) {
     if (isShortPlaceholderDuration(playbackSnapshot.durationMs)) return
-    val provided = progressPercent
-    if (!hasRequestedScrobbleStartForCurrentItem && (provided ?: 0f) < 80f) return
-
-    val percent = provided ?: currentPlaybackProgressPercent()
+    val percent = progressPercent ?: currentPlaybackProgressPercent()
+    // A pause stands on a session or on the start above the bar; a stop also stands on the bar itself,
+    // which is where a viewing ends and its finish has to reach the trackers.
+    val allowed = if (action == TrackingScrobbleAction.PAUSE) {
+        shouldSendPauseScrobble(
+            hasActiveScrobble = hasRequestedScrobbleStartForCurrentItem,
+            progressPercent = percent,
+            hasStartAboveCompletionBar = hasSentStartAboveCompletionBarForCurrentItem,
+        )
+    } else {
+        shouldSendStopScrobble(
+            hasActiveScrobble = hasRequestedScrobbleStartForCurrentItem,
+            progressPercent = percent,
+            hasStartAboveCompletionBar = hasSentStartAboveCompletionBarForCurrentItem,
+        )
+    }
+    if (!allowed) {
+        return
+    }
+    /*
+     * A pause or a stop below the bar for a playback no session owns: the trackers that take such
+     * reports hear where the user left it, and the ones that would read it as a finished watch never
+     * see it. Above the bar the stop stays as it is for everyone, because there it is the finish of a
+     * viewing and the trackers that record it have to hear about it.
+     */
+    val sessionless = !hasRequestedScrobbleStartForCurrentItem &&
+        hasSentStartAboveCompletionBarForCurrentItem &&
+        (action == TrackingScrobbleAction.PAUSE || percent < TRACKING_COMPLETION_BAR_PERCENT.toFloat())
     val mediaSnapshot = currentTrackingMedia
     val inputsSnapshot = snapshotTrackingScrobbleItemInputs()
     // IntroDB knows where the credits start, and a playback that reached them is over for the tracker
@@ -280,11 +356,15 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
                 media = media,
                 progressPercent = percent.toDouble(),
                 contentEndPercent = contentEndPercent,
+                sessionless = sessionless,
             ),
         )
     }
     currentTrackingMedia = null
     hasRequestedScrobbleStartForCurrentItem = false
+    // The pause that ends this stretch clears the mark, so the resume after the pause reports the
+    // watching state again; the stop ends the item for good.
+    hasSentStartAboveCompletionBarForCurrentItem = false
     pendingSeekScrobbleRestart = false
     scrobbleStartRequestGeneration += 1L
 }
@@ -292,29 +372,71 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
 internal fun PlayerScreenRuntime.emitStopScrobbleForCurrentProgress() {
     if (isShortPlaceholderDuration(playbackSnapshot.durationMs)) return
     val progressPercent = currentPlaybackProgressPercent()
-    if (!shouldSendStopScrobble(hasRequestedScrobbleStartForCurrentItem, progressPercent)) {
+    if (
+        !shouldSendStopScrobble(
+            hasActiveScrobble = hasRequestedScrobbleStartForCurrentItem,
+            hasStartAboveCompletionBar = hasSentStartAboveCompletionBarForCurrentItem,
+            progressPercent = progressPercent,
+        )
+    ) {
         return
     }
-    if (progressPercent < 80f) {
+    if (progressPercent < TRACKING_COMPLETION_BAR_PERCENT.toFloat()) {
         emitTrackingScrobbleStop(progressPercent)
         return
     }
 
-    if (progressPercent >= 80f && !hasSentCompletionScrobbleForCurrentItem) {
+    if (!hasSentCompletionScrobbleForCurrentItem) {
         hasSentCompletionScrobbleForCurrentItem = true
         emitTrackingScrobbleStop(progressPercent)
     }
 }
 
+/**
+ * Whether a pause is worth reporting.
+ *
+ * An active session owns its playback below and above the bar, and a playback that only ever got its
+ * start above the bar is reported by the tracker that took that start, so its pause goes out too and
+ * the tracker learns where the user stopped.
+ */
+internal fun shouldSendPauseScrobble(
+    hasActiveScrobble: Boolean,
+    progressPercent: Float,
+    hasStartAboveCompletionBar: Boolean = false,
+): Boolean = progressPercent in 0f..100f && (hasActiveScrobble || hasStartAboveCompletionBar)
+
+/**
+ * Whether a stop is worth reporting.
+ *
+ * Same as the pause, plus the rule the completion bar already had: a stop above the bar stands on its
+ * own, because that is where a viewing ends and the trackers have to hear about the finish.
+ */
 internal fun shouldSendStopScrobble(
     hasActiveScrobble: Boolean,
     progressPercent: Float,
-): Boolean = hasActiveScrobble || progressPercent >= 80f
+    hasStartAboveCompletionBar: Boolean = false,
+): Boolean = hasActiveScrobble || hasStartAboveCompletionBar ||
+    progressPercent >= TRACKING_COMPLETION_BAR_PERCENT.toFloat()
+
+/**
+ * Whether a playback that began above the completion bar still needs its start sent.
+ *
+ * Below the bar the start is the session the rest of the playback is reported through, and that path
+ * owns it. Above the bar the start is only a "watching now" report, sent once per playback stretch:
+ * a pause clears the mark, so the resume after the pause sends one again and the tracker sees the
+ * playback continue.
+ */
+internal fun shouldSendStartAboveCompletionBar(
+    hasSentAboveCompletionBar: Boolean,
+    progressPercent: Float,
+): Boolean =
+    progressPercent.toDouble() >= TRACKING_COMPLETION_BAR_PERCENT && !hasSentAboveCompletionBar
 
 internal fun shouldUpdateTrackingScrobbleAfterSeek(
     hasActiveScrobble: Boolean,
     progressPercent: Float,
-): Boolean = hasActiveScrobble && progressPercent >= 1f && progressPercent < 80f
+): Boolean = hasActiveScrobble && progressPercent >= 1f &&
+    progressPercent < TRACKING_COMPLETION_BAR_PERCENT.toFloat()
 
 internal fun PlayerScreenRuntime.emitTrackingSeekScrobbleStart() {
     if (isShortPlaceholderDuration(playbackSnapshot.durationMs)) return

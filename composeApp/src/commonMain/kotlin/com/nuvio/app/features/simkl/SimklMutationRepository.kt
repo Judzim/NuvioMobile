@@ -179,6 +179,14 @@ internal class SimklMutationService(
 object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, TrackingScrobbler {
     override val providerId: TrackingProviderId = TrackingProviderId.SIMKL
 
+    /*
+     * Simkl keeps a "watching now" state of its own and its pause carries the completion threshold,
+     * so the account itself answers whether the playback was paused or finished. A playback that no
+     * session owns is welcome here: the pause tells Simkl where the user stopped and the start after
+     * the resume tells it the playback continued.
+     */
+    override val acceptsSessionlessScrobbles = true
+
     private val remote = SimklApiSyncRemote()
 
     private val service by lazy {
@@ -389,6 +397,7 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
                 priorWatch = priorWatch,
                 nowEpochMs = SimklPlatformClock.nowEpochMs(),
                 hasRunningSession = runningSessionId != null,
+                progressPercent = event.progressPercent,
             )
             if (askToStartRun) {
                 SimklRewatchConsentRepository.ask(media)

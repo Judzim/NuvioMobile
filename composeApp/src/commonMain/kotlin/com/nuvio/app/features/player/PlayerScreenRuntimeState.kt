@@ -156,6 +156,8 @@ internal class PlayerScreenRuntime(
     var lastProgressPersistEpochMs by mutableStateOf(0L)
     var previousIsPlaying by mutableStateOf(false)
     var hasRequestedScrobbleStartForCurrentItem by mutableStateOf(false)
+    /** A start was sent for this item while the playback was already past the completion bar. */
+    var hasSentStartAboveCompletionBarForCurrentItem by mutableStateOf(false)
     var scrobbleStartRequestGeneration by mutableStateOf(0L)
     var pendingSeekScrobbleRestart by mutableStateOf(false)
     var hasSentCompletionScrobbleForCurrentItem by mutableStateOf(false)
