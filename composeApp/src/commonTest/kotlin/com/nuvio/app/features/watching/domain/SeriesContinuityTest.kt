@@ -229,6 +229,33 @@ class SeriesContinuityTest {
     }
 
     @Test
+    fun decideSeriesPrimaryAction_resumes_the_run_episode_with_saved_progress() {
+        val action = decideSeriesPrimaryAction(
+            content = show,
+            episodes = episodes,
+            progressRecords = listOf(
+                WatchingProgressRecord(
+                    content = show,
+                    videoId = "show:1:2",
+                    seasonNumber = 1,
+                    episodeNumber = 2,
+                    lastUpdatedEpochMs = 300L,
+                    lastPositionMs = 1_500L,
+                ),
+            ),
+            watchedRecords = emptyList(),
+            todayIsoDate = "2026-03-30",
+            rewatchSeasonNumber = 1,
+            rewatchEpisodeNumber = 1,
+        )
+
+        assertNotNull(action)
+        assertEquals("Resume S1 E2", action.label)
+        assertEquals("show:1:2", action.videoId)
+        assertEquals(1_500L, action.resumePositionMs)
+    }
+
+    @Test
     fun decideSeriesPrimaryAction_prefers_resume_when_resume_is_newer_than_completed() {
         val action = decideSeriesPrimaryAction(
             content = show,

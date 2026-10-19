@@ -153,9 +153,21 @@ fun decideSeriesPrimaryAction(
             showUnairedNextUp = showUnairedNextUp,
         )
         if (runEpisode != null) {
+            val runProgress = progressRecords.firstOrNull { record ->
+                record.content.matchesWatchingContent(content) &&
+                    record.seasonNumber == runEpisode.seasonNumber &&
+                    record.episodeNumber == runEpisode.episodeNumber &&
+                    !record.isCompleted &&
+                    record.lastPositionMs > 0L
+            }
             return content.actionForEpisode(
                 episode = runEpisode,
-                label = upNextLabel(runEpisode.seasonNumber, runEpisode.episodeNumber),
+                label = if (runProgress != null) {
+                    resumeLabel(runEpisode.seasonNumber, runEpisode.episodeNumber)
+                } else {
+                    upNextLabel(runEpisode.seasonNumber, runEpisode.episodeNumber)
+                },
+                resumePositionMs = runProgress?.lastPositionMs,
             )
         }
     }
@@ -214,6 +226,7 @@ private fun WatchingContentRef.actionForEpisode(
     episode: WatchingReleasedEpisode,
     label: String,
     isWatchAgain: Boolean = false,
+    resumePositionMs: Long? = null,
 ): WatchingSeriesPrimaryAction =
     WatchingSeriesPrimaryAction(
         label = label,
@@ -227,7 +240,7 @@ private fun WatchingContentRef.actionForEpisode(
         episodeNumber = episode.episodeNumber,
         episodeTitle = episode.title,
         episodeThumbnail = episode.thumbnail,
-        resumePositionMs = null,
+        resumePositionMs = resumePositionMs,
         isWatchAgain = isWatchAgain,
     )
 
