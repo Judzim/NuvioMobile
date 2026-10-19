@@ -2,7 +2,6 @@ package com.nuvio.app.features.simkl
 
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
-import com.nuvio.app.features.watching.domain.ContentEndTolerancePercent
 
 /**
  * How Nuvio records rewatches on Simkl.
@@ -78,10 +77,11 @@ internal fun coerceSimklWatchedThresholdPercent(percent: Int): Int = percent.coe
  * percentage the user set as their own floor. The percentage is the fallback, and it is what decides
  * for the items IntroDB knows nothing about.
  *
- * The marker is read one point early, so a timestamp that is a few seconds off does not leave a finished
- * playback reported as unfinished. Under what Simkl needs to record a watch it cannot be used at all,
- * since a stop reported there is not counted by the account, so the threshold decides instead. That is
- * also why the threshold itself is never read below that bar.
+ * The marker arrives already read with its tolerance, five seconds early, from the player, so a
+ * timestamp that is a few seconds off does not leave a finished playback reported as unfinished. Under
+ * what Simkl needs to record a watch it cannot be used at all, since a stop reported there is not
+ * counted by the account, so the threshold decides instead. That is also why the threshold itself is
+ * never read below that bar.
  */
 internal fun resolvedSimklCompletionPercent(
     userThresholdPercent: Double,
@@ -92,9 +92,8 @@ internal fun resolvedSimklCompletionPercent(
         ?.coerceAtLeast(SIMKL_REWATCH_MIN_PROGRESS_PERCENT)
         ?: SIMKL_REWATCH_MIN_PROGRESS_PERCENT
     val marker = contentEndPercent?.takeIf { value -> value.isFinite() } ?: return userThreshold
-    val markerWithTolerance = marker - ContentEndTolerancePercent
-    if (markerWithTolerance < SIMKL_REWATCH_MIN_PROGRESS_PERCENT) return userThreshold
-    return markerWithTolerance
+    if (marker < SIMKL_REWATCH_MIN_PROGRESS_PERCENT) return userThreshold
+    return marker
 }
 
 /** Simkl merges two watches of the same item this close together, so asking would be pointless. */

@@ -58,10 +58,11 @@ class SimklRewatchPolicyTest {
     @Test
     fun `a stop before the credits is not a finished stop, whatever the user bar`() {
         // The threshold says 80 and the playback stopped at 85, but the credits start at 93, so the
-        // playback is not over and no rewatch is written for it.
+        // playback is not over and no rewatch is written for it. The marker arrives with the tolerance
+        // already read off by the player, so it is the number this rule uses.
         val completion = resolvedSimklCompletionPercent(userThresholdPercent = 80.0, contentEndPercent = 93.0)
 
-        assertEquals(92.0, completion, 0.0001)
+        assertEquals(93.0, completion, 0.0001)
         assertFalse(
             record(
                 mode = SimklRewatchMode.AUTOMATIC,
@@ -74,7 +75,7 @@ class SimklRewatchPolicyTest {
             record(
                 mode = SimklRewatchMode.AUTOMATIC,
                 accountType = "pro",
-                progressPercent = 92.0,
+                progressPercent = 93.0,
                 completionThresholdPercent = completion,
             ),
         )

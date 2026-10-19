@@ -18,23 +18,24 @@ class SimklRewatchCompletionTest {
     @Test
     fun `the credits are the end of the content, above the user threshold as well`() {
         // Stopping at 85 when the credits start at 93 is not a finished playback, however low the user
-        // set their own bar, so the marker decides, read one point early as its tolerance.
-        assertEquals(92.0, resolvedSimklCompletionPercent(80.0, 93.0), 0.0001)
-        assertEquals(95.5, resolvedSimklCompletionPercent(90.0, 96.5), 0.0001)
+        // set their own bar, so the marker decides. The player read its tolerance off already, so the
+        // marker is used as it arrives.
+        assertEquals(93.0, resolvedSimklCompletionPercent(80.0, 93.0), 0.0001)
+        assertEquals(96.5, resolvedSimklCompletionPercent(90.0, 96.5), 0.0001)
     }
 
     @Test
     fun `the credits end a playback earlier than the user threshold would`() {
-        // The user asked for 95, the credits start at 88: the content is over at 87 once the marker is
-        // read with its tolerance.
-        assertEquals(87.0, resolvedSimklCompletionPercent(95.0, 88.0), 0.0001)
+        // The user asked for 95, the credits start at 88: the content is over at 88, read five seconds
+        // early by the player.
+        assertEquals(88.0, resolvedSimklCompletionPercent(95.0, 88.0), 0.0001)
     }
 
     @Test
-    fun `a marker that cannot survive the tolerance is ignored`() {
-        // Simkl records a watch from 80 percent up, so a marker that lands under that once the tolerance
-        // is taken off cannot be used: a stop reported there is not counted by the account at all.
-        assertEquals(95.0, resolvedSimklCompletionPercent(95.0, 80.5), 0.0001)
+    fun `a marker under the bar cannot be used`() {
+        // Simkl records a watch from 80 percent up, so a marker that arrives under that cannot be used:
+        // a stop reported there is not counted by the account at all.
+        assertEquals(80.5, resolvedSimklCompletionPercent(95.0, 80.5), 0.0001)
         assertEquals(95.0, resolvedSimklCompletionPercent(95.0, 79.99), 0.0001)
         assertEquals(95.0, resolvedSimklCompletionPercent(95.0, 62.0), 0.0001)
     }

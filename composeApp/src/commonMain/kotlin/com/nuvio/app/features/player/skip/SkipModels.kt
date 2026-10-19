@@ -79,6 +79,28 @@ internal fun List<SkipInterval>.contentEndPercent(durationMs: Long): Double? {
     return creditsStartMs / durationMs.toDouble() * 100.0
 }
 
+/**
+ * How early the content end marker is read, in seconds.
+ *
+ * The margin is a fixed number of seconds and not a share of the runtime: one percent of the runtime
+ * read a 20 minute episode 13 seconds early and a two hour film over a minute early, which is the
+ * credits pointed at too soon on the long ones.
+ */
+internal const val ContentEndToleranceSeconds = 5.0
+
+/**
+ * The marker read [ContentEndToleranceSeconds] early, as a percentage of the same duration.
+ *
+ * A margin that reaches past the start of the video is read as the start, and what cannot be a
+ * completion point from there is refused by the caller and its own bar, not here.
+ */
+internal fun Double?.contentEndWithTolerance(durationMs: Long): Double? {
+    if (this == null) return null
+    if (durationMs <= 0L) return null
+    val tolerancePercent = ContentEndToleranceSeconds * 1_000.0 / durationMs.toDouble() * 100.0
+    return (this - tolerancePercent).coerceAtLeast(0.0)
+}
+
 /** Segment types that mark where the content ends: the series outro and the film credits. */
 internal val ContentEndSegmentTypes: Set<String> =
     PlayerNextEpisodeRules.OUTRO_SEGMENT_TYPES + setOf("movie-credits")

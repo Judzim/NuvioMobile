@@ -2,7 +2,9 @@ package com.nuvio.app.features.player
 
 import com.nuvio.app.features.servers.ServerItemRef
 import com.nuvio.app.features.servers.ServerStreams
+import com.nuvio.app.features.player.skip.ContentEndToleranceSeconds
 import com.nuvio.app.features.player.skip.contentEndPercent
+import com.nuvio.app.features.player.skip.contentEndWithTolerance
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.tracking.TrackingMediaReference
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
@@ -375,11 +377,13 @@ internal fun PlayerScreenRuntime.flushWatchProgress(
 
 /**
  * Where the content really ends for the playback on screen, as a percentage, from the credits marker of
- * the release being played. The tracker and the local progress row both decide with this number, so a
- * playback that stopped before the credits is not read as finished by either of them.
+ * the release being played, read [ContentEndToleranceSeconds] early. The tracker and the local progress
+ * row both decide with this number, so a playback that stopped before the credits is not read as
+ * finished by either of them, and neither of them takes the tolerance off a second time.
  */
 internal fun PlayerScreenRuntime.currentContentEndPercent(): Double? =
     contentEndIntervals.contentEndPercent(playbackSnapshot.durationMs)
+        .contentEndWithTolerance(playbackSnapshot.durationMs)
 
 internal fun PlayerScreenRuntime.scheduleProgressSyncAfterSeek() {
     val shouldRestartScrobbleAfterSeek = shouldPlay || playbackSnapshot.isPlaying

@@ -57,6 +57,41 @@ class ContentEndPercentTest {
     }
 
     @Test
+    fun `the marker is read five seconds early, whatever the runtime`() {
+        // A 20 minute episode: the credits at 18:20 are read from 18:15.
+        val episode = listOf(SkipInterval(1_100.0, 1_140.0, "outro", "introdb"))
+            .contentEndPercent(1_200_000L)!!
+            .contentEndWithTolerance(1_200_000L)!!
+        assertEquals(1_095.0 / 1_200.0 * 100.0, episode, 0.001)
+
+        // A two hour film: the credits at 1:58:20 are read from 1:58:15. The same five seconds, not a
+        // share of the runtime.
+        val film = listOf(SkipInterval(7_100.0, 7_200.0, "outro", "introdb"))
+            .contentEndPercent(7_200_000L)!!
+            .contentEndWithTolerance(7_200_000L)!!
+        assertEquals(7_095.0 / 7_200.0 * 100.0, film, 0.001)
+    }
+
+    @Test
+    fun `a margin that reaches past the start of the video reads as the start`() {
+        assertEquals(
+            0.0,
+            listOf(SkipInterval(3.0, 30.0, "outro", "introdb"))
+                .contentEndPercent(1_200_000L)!!
+                .contentEndWithTolerance(1_200_000L)!!,
+            0.001,
+        )
+    }
+
+    @Test
+    fun `a marker that was not read gets no margin either`() {
+        val none: Double? = null
+
+        assertNull(none.contentEndWithTolerance(1_200_000L))
+        assertNull(none.contentEndWithTolerance(0L))
+    }
+
+    @Test
     fun `a marker outside the video is not usable`() {
         val pastTheEnd = listOf(SkipInterval(1_900.0, 1_950.0, "outro", "introdb"))
         val atTheStart = listOf(SkipInterval(0.0, 30.0, "outro", "introdb"))

@@ -10,9 +10,10 @@ class WatchingPoliciesTest {
     private val show = WatchingContentRef(type = "series", id = "show")
 
     @Test
-    fun completionFractionReadsTheCreditsMarkerOnePointEarly() {
+    fun completionFractionTurnsTheMarkerItIsGivenIntoAFraction() {
+        // The player read the tolerance off the marker already, so this only turns it into a fraction.
         assertEquals(null, completionFractionFor(null))
-        assertEquals(0.95, completionFractionFor(96.0))
+        assertEquals(0.96, completionFractionFor(96.0))
         // A marker that is not a position in the video is not usable either, and the percentage decides.
         assertEquals(null, completionFractionFor(0.0))
         assertEquals(null, completionFractionFor(-5.0))
@@ -21,22 +22,22 @@ class WatchingPoliciesTest {
 
     @Test
     fun isProgressCompleteUsesTheCreditsMarkerWhenItIsKnown() {
-        // Credits at 96 percent: a playback at 94 is not finished, one that reached 95 is, because the
-        // marker is read one point early.
+        // Credits at 96 percent of a 33 minute episode, read five seconds early, which is 95.75: a
+        // playback at 95.5 is not finished, one that reached 95.9 is.
         assertFalse(
             isProgressComplete(
-                positionMs = 1_880_000L,
+                positionMs = 1_910_000L,
                 durationMs = 2_000_000L,
                 isEnded = false,
-                completionFraction = completionFractionFor(96.0),
+                completionFraction = completionFractionFor(95.75),
             ),
         )
         assertTrue(
             isProgressComplete(
-                positionMs = 1_900_000L,
+                positionMs = 1_918_000L,
                 durationMs = 2_000_000L,
                 isEnded = false,
-                completionFraction = completionFractionFor(96.0),
+                completionFraction = completionFractionFor(95.75),
             ),
         )
 
