@@ -13,8 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.DialogButton
@@ -119,8 +117,6 @@ internal fun LazyListScope.advancedSettingsContent(
             SettingsGroup(isTablet = isTablet) {
                 val scope = rememberCoroutineScope()
                 var cleared by rememberSaveable { mutableStateOf(false) }
-                val diagnosticsClipboard = LocalClipboardManager.current
-                var diagnosticsCopied by rememberSaveable { mutableStateOf(false) }
                 SettingsNavigationRow(
                     title = stringResource(Res.string.settings_advanced_clear_cw_cache),
                     description = if (cleared) {
@@ -138,19 +134,6 @@ internal fun LazyListScope.advancedSettingsContent(
                                     ProfileRepository.activeProfileId,
                                 )
                             }
-                        }
-                    },
-                )
-                SettingsNavigationRow(
-                    title = "Copy CW diagnostics (debug)",
-                    description = if (diagnosticsCopied) "Copied to clipboard" else "Raw stored dates, rewatch runs and next-up results",
-                    isTablet = isTablet,
-                    onClick = {
-                        scope.launch {
-                            runCatching {
-                                diagnosticsClipboard.setText(AnnotatedString(buildCwDebugReport()))
-                            }
-                            diagnosticsCopied = true
                         }
                     },
                 )
