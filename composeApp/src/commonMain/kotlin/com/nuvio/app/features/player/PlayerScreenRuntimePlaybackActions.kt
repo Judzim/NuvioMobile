@@ -433,6 +433,9 @@ internal fun PlayerScreenRuntime.emitStopScrobbleForCurrentProgress() {
  * latch keeps the repeated snapshots of the ended state from sending it twice.
  */
 internal fun PlayerScreenRuntime.emitCompletionScrobbleStop(progressPercent: Float) {
+    // A short clip is a placeholder, not a viewing: the terminal call below would drop the event,
+    // and the latch must not be set for one that never leaves.
+    if (isShortPlaceholderDuration(playbackSnapshot.durationMs)) return
     if (progressPercent < TRACKING_COMPLETION_BAR_PERCENT.toFloat() ||
         hasSentCompletionScrobbleForCurrentItem
     ) {
