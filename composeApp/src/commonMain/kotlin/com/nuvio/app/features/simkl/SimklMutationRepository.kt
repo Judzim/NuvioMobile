@@ -351,6 +351,7 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             completionThresholdPercent = completionThresholdPercent,
             hasRunningSession = runningSessionId != null,
             consented = SimklRewatchConsentRepository.grantedFor(media),
+            hasPlaybackSession = event.hasPlaybackSession,
         )
         val result = service.scrobble(
             action = action,

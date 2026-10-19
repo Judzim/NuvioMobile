@@ -160,10 +160,12 @@ internal fun shouldRecordSimklRewatchOnStop(
     completionThresholdPercent: Double = SIMKL_REWATCH_MIN_PROGRESS_PERCENT,
     hasRunningSession: Boolean = false,
     consented: Boolean = false,
+    hasPlaybackSession: Boolean = true,
 ): Boolean = when {
     mode == SimklRewatchMode.OFF -> false
     !isSimklRewatchPlanEligible(accountType) -> false
     action != TrackingScrobbleAction.STOP -> false
+    !hasPlaybackSession -> false
     progressPercent < completionThresholdPercent -> false
     mode == SimklRewatchMode.AUTOMATIC -> true
     // Semi-automatic writes only where the user said so: a run of the item is open on the account,

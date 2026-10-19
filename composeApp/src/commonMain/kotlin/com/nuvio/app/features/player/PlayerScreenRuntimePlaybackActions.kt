@@ -129,6 +129,20 @@ internal fun PlayerScreenRuntime.currentLaunch(launch: PlayerLaunch): PlayerLaun
     )
 }
 
+private var lastIssuedScrobblePlaybackId = 0L
+
+/**
+ * A run id that a tracker can use to collapse the completions of one playback without touching a
+ * later, separate viewing. The clock keeps it unique across player runtimes; the guard keeps two
+ * runs started in the same millisecond apart.
+ */
+internal fun nextScrobblePlaybackId(): Long {
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    lastIssuedScrobblePlaybackId =
+        if (now > lastIssuedScrobblePlaybackId) now else lastIssuedScrobblePlaybackId + 1L
+    return lastIssuedScrobblePlaybackId
+}
+
 internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
     val identity = activePlaybackKey
     if (lastResetPlaybackIdentity != identity) {
@@ -160,7 +174,9 @@ internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
         scrobbleStartRequestGeneration = 0L
         pendingSeekScrobbleRestart = false
         hasSentCompletionScrobbleForCurrentItem = false
+        hasOpenedScrobbleSessionForCurrentItem = false
         currentTrackingMedia = null
+        scrobblePlaybackId = nextScrobblePlaybackId()
     }
 }
 
@@ -229,7 +245,12 @@ internal fun PlayerScreenRuntime.emitTrackingScrobbleStart() {
     // Under the bar again (a fresh playback, or one seeked back): the session below owns the item,
     // and a start already sent above the bar does not stand in its way.
     hasSentStartAboveCompletionBarForCurrentItem = false
+    // The run has a session from here on, even if a pause later closes the one that is open.
+    hasOpenedScrobbleSessionForCurrentItem = true
     if (hasRequestedScrobbleStartForCurrentItem) return
+    // A new session is a new viewing: the completion latch of the run that ended before this one
+    // must not suppress this run's own end.
+    hasSentCompletionScrobbleForCurrentItem = false
     hasRequestedScrobbleStartForCurrentItem = true
     val requestGeneration = scrobbleStartRequestGeneration + 1L
     scrobbleStartRequestGeneration = requestGeneration
@@ -251,6 +272,8 @@ internal fun PlayerScreenRuntime.emitTrackingScrobbleStart() {
             event = TrackingScrobbleEvent(
                 media = media,
                 progressPercent = currentPlaybackProgressPercent().toDouble(),
+                hasPlaybackSession = true,
+                playbackId = scrobblePlaybackId,
             ),
         )
     }
@@ -274,6 +297,10 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleStartAboveCompletionBar(prog
         return
     }
     hasSentStartAboveCompletionBarForCurrentItem = true
+    // A new stretch of the playback has its own end, so a completion of the stretch before it does
+    // not suppress this one. It still opens no session: the stop above the bar must not ask for a
+    // rewatch for a viewing that was already past the bar when it began.
+    hasSentCompletionScrobbleForCurrentItem = false
     val media = currentTrackingMedia()
     if (!media.hasResolvableIdentity) {
         hasSentStartAboveCompletionBarForCurrentItem = false
@@ -288,6 +315,8 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleStartAboveCompletionBar(prog
                 media = media,
                 progressPercent = progressPercent.toDouble(),
                 sessionless = true,
+                hasPlaybackSession = false,
+                playbackId = scrobblePlaybackId,
             ),
         )
     }
@@ -346,6 +375,8 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
     // even when it stopped below the percentage the user set. Snapshot here, before the write leaves,
     // because the marker and the duration belong to this playback, not to the request.
     val contentEndPercent = currentContentEndPercent()
+    val hasPlaybackSession = hasOpenedScrobbleSessionForCurrentItem
+    val playbackId = scrobblePlaybackId
     scope.launch(NonCancellable) {
         val media = mediaSnapshot ?: inputsSnapshot.buildMedia()
         if (!media.hasResolvableIdentity) return@launch
@@ -357,6 +388,8 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
                 progressPercent = percent.toDouble(),
                 contentEndPercent = contentEndPercent,
                 sessionless = sessionless,
+                hasPlaybackSession = hasPlaybackSession,
+                playbackId = playbackId,
             ),
         )
     }
@@ -390,6 +423,23 @@ internal fun PlayerScreenRuntime.emitStopScrobbleForCurrentProgress() {
         hasSentCompletionScrobbleForCurrentItem = true
         emitTrackingScrobbleStop(progressPercent)
     }
+}
+
+/**
+ * The stop of a playback that reached its natural end.
+ *
+ * The end is 100% by definition: a position the engine reports just short of the duration would be a
+ * pause to the tracker at a 100% threshold, and a viewing that reached the end has to complete. The
+ * latch keeps the repeated snapshots of the ended state from sending it twice.
+ */
+internal fun PlayerScreenRuntime.emitCompletionScrobbleStop(progressPercent: Float) {
+    if (progressPercent < TRACKING_COMPLETION_BAR_PERCENT.toFloat() ||
+        hasSentCompletionScrobbleForCurrentItem
+    ) {
+        return
+    }
+    hasSentCompletionScrobbleForCurrentItem = true
+    emitTrackingScrobbleStop(progressPercent)
 }
 
 /**
@@ -452,6 +502,8 @@ internal fun PlayerScreenRuntime.emitTrackingSeekScrobbleStart() {
             event = TrackingScrobbleEvent(
                 media = media,
                 progressPercent = currentPlaybackProgressPercent().toDouble(),
+                hasPlaybackSession = true,
+                playbackId = scrobblePlaybackId,
             ),
         )
     }
@@ -484,10 +536,15 @@ internal suspend fun PlayerScreenRuntime.resolveParentalGuideImdbId(): String? {
 
 internal fun PlayerScreenRuntime.flushWatchProgress(
     scrobbleAction: TrackingScrobbleAction = TrackingScrobbleAction.STOP,
+    completionPercent: Float? = null,
 ) {
     when (scrobbleAction) {
         TrackingScrobbleAction.PAUSE -> emitTrackingScrobblePause()
-        TrackingScrobbleAction.STOP -> emitStopScrobbleForCurrentProgress()
+        TrackingScrobbleAction.STOP -> if (completionPercent != null) {
+            emitCompletionScrobbleStop(completionPercent)
+        } else {
+            emitStopScrobbleForCurrentProgress()
+        }
         TrackingScrobbleAction.START -> Unit
     }
     WatchProgressRepository.flushPlaybackProgress(
@@ -534,6 +591,8 @@ internal fun PlayerScreenRuntime.scheduleProgressSyncAfterSeek() {
         val stopEvent = TrackingScrobbleEvent(
             media = media,
             progressPercent = progressPercent.toDouble(),
+            hasPlaybackSession = true,
+            playbackId = scrobblePlaybackId,
         )
         scope.launch {
             if (isShortPlaceholderDuration(playbackSnapshot.durationMs)) return@launch

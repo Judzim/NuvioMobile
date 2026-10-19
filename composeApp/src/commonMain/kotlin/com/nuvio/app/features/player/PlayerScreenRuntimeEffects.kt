@@ -446,7 +446,7 @@ private fun PlayerScreenRuntime.BindPlayerUiVisibilityEffects() {
             isEnded = playbackSnapshot.isEnded,
         )
         if (playbackSnapshot.isEnded) {
-            flushWatchProgress(TrackingScrobbleAction.STOP)
+            flushWatchProgress(TrackingScrobbleAction.STOP, completionPercent = 100f)
             previousIsPlaying = false
             pendingSeekScrobbleRestart = false
             return@LaunchedEffect

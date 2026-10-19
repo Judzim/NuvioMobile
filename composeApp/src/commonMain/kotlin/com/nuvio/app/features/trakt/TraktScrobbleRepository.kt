@@ -98,6 +98,11 @@ internal object TraktScrobbleRepository : TrackingScrobbler {
     private var lastScrobbleStamp: ScrobbleStamp? = null
     private val minSendIntervalMs = 8_000L
     private val progressWindow = 1.5f
+    /*
+     * A playback that pauses above the bar and ends later reports two completions. The player's run
+     * id lets the repeat be dropped without touching a later, separate viewing.
+     */
+    private var lastCompletedPlaybackId = 0L
     private val maxStopRetries = 2
     private val retryDelayMs = 1_500L
     private val serverOverloadedRetryDelayMs = 5_000L
@@ -125,6 +130,15 @@ internal object TraktScrobbleRepository : TrackingScrobbler {
         ) {
             return
         }
+        val completesPlayback = event.progressPercent >= TRACKING_COMPLETION_BAR_PERCENT &&
+            (action == TrackingScrobbleAction.PAUSE || action == TrackingScrobbleAction.STOP)
+        if (
+            completesPlayback &&
+            event.playbackId != 0L &&
+            event.playbackId == lastCompletedPlaybackId
+        ) {
+            return
+        }
         val item = buildItem(event.media) ?: return
         sendScrobble(
             profileId = profileId,
@@ -132,6 +146,9 @@ internal object TraktScrobbleRepository : TrackingScrobbler {
             item = item,
             progressPercent = event.progressPercent.toFloat(),
         )
+        if (completesPlayback && event.playbackId != 0L) {
+            lastCompletedPlaybackId = event.playbackId
+        }
     }
 
     suspend fun scrobbleStart(profileId: Int, item: TraktScrobbleItem, progressPercent: Float) {

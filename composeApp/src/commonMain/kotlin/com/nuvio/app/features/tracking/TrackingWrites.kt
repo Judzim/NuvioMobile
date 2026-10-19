@@ -76,6 +76,21 @@ data class TrackingScrobbleEvent(
      * accept them (see [TrackingScrobbler.acceptsSessionlessScrobbles]).
      */
     val sessionless: Boolean = false,
+    /**
+     * Whether the stop ends a playback session the player opened.
+     *
+     * A playback that only ever reported its start above the completion bar opens no session, so a
+     * stop that ends it is not a viewing that can be repeated and must not ask for a rewatch.
+     */
+    val hasPlaybackSession: Boolean = false,
+    /**
+     * Identifies one run of the player for the item.
+     *
+     * A tracker that records a watch on a stop uses it to collapse a completion it already recorded
+     * when the same playback ends again after a pause, without suppressing a later, separate viewing.
+     * Zero means the caller has no playback identity, and nothing is collapsed.
+     */
+    val playbackId: Long = 0L,
 )
 
 data class TrackingMutationResult(

@@ -48,6 +48,12 @@ class SimklRewatchPolicyTest {
     }
 
     @Test
+    fun `a stop without a playback session does not ask for a rewatch`() {
+        assertFalse(record(SimklRewatchMode.AUTOMATIC, "pro", hasPlaybackSession = false))
+        assertTrue(record(SimklRewatchMode.AUTOMATIC, "pro", hasPlaybackSession = true))
+    }
+
+    @Test
     fun `a playback that begins above the completion bar is not asked about`() {
         val nowEpochMs = 10_000_000_000L
         val watchedLongAgo = SimklPriorWatch(
@@ -222,12 +228,14 @@ class SimklRewatchPolicyTest {
         action: TrackingScrobbleAction = TrackingScrobbleAction.STOP,
         progressPercent: Double = 95.0,
         completionThresholdPercent: Double = SIMKL_REWATCH_MIN_PROGRESS_PERCENT,
+        hasPlaybackSession: Boolean = true,
     ): Boolean = shouldRecordSimklRewatchOnStop(
         mode = mode,
         accountType = accountType,
         action = action,
         progressPercent = progressPercent,
         completionThresholdPercent = completionThresholdPercent,
+        hasPlaybackSession = hasPlaybackSession,
     )
 
     private fun ask(
