@@ -120,6 +120,8 @@ internal fun List<SimklLibraryEntry>.hasWatchedTitle(reference: TrackingMediaRef
 internal data class SimklRewatchRead(
     val runs: List<RewatchRunPosition>,
     val sessions: List<SimklLibraryEntry>,
+    /** Whether [sessions] is the whole set the account holds, not a delta merged into it. */
+    val complete: Boolean,
 )
 
 private fun buildRewatchRun(

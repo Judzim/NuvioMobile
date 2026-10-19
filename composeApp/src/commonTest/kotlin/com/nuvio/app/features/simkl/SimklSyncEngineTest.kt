@@ -68,6 +68,7 @@ class SimklSyncEngineTest {
             watermark = "v1",
             activities = activities(all = "v1"),
             entries = listOf(entry(SimklMediaType.SHOWS, "1")),
+            rewatchSessionsComplete = true,
             lastCheckedAtEpochMs = 10L,
         )
         val remote = ScriptedRemote(Step.Activities(activities(all = "v1")))

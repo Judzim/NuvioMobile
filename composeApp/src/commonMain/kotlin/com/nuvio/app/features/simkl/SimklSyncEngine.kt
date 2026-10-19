@@ -16,7 +16,11 @@ internal class SimklSyncEngine(
         if (!current.isInitialized) return initialSync()
 
         val activities = remote.fetchActivities()
-        if (activities.all == current.watermark && !forceRewatchRead) {
+        if (
+            activities.all == current.watermark &&
+            !forceRewatchRead &&
+            current.rewatchSessionsComplete
+        ) {
             return current.copy(
                 activities = activities,
                 lastCheckedAtEpochMs = nowEpochMs(),
@@ -50,6 +54,7 @@ internal class SimklSyncEngine(
             playback = playback,
             rewatchRuns = rewatch.runs,
             rewatchSessions = rewatch.sessions,
+            rewatchSessionsComplete = rewatch.complete,
             lastSyncedAtEpochMs = now,
             lastCheckedAtEpochMs = now,
         ).reconcileWatchedPlayback()
@@ -76,6 +81,7 @@ internal class SimklSyncEngine(
             playback = playback,
             rewatchRuns = rewatch.runs,
             rewatchSessions = rewatch.sessions,
+            rewatchSessionsComplete = rewatch.complete,
             lastSyncedAtEpochMs = now,
             lastCheckedAtEpochMs = now,
         ).reconcileWatchedPlayback()
@@ -106,11 +112,16 @@ internal class SimklSyncEngine(
             // because there the plan is unknown, not known to be ineligible.
             val knownToHoldNoSessions = mode == SimklRewatchMode.OFF || accountType != null
             return if (knownToHoldNoSessions) {
-                SimklRewatchRead(runs = emptyList(), sessions = current?.rewatchSessions.orEmpty())
+                SimklRewatchRead(
+                    runs = emptyList(),
+                    sessions = current?.rewatchSessions.orEmpty(),
+                    complete = current?.rewatchSessionsComplete ?: false,
+                )
             } else {
                 SimklRewatchRead(
                     runs = current?.rewatchRuns.orEmpty(),
                     sessions = current?.rewatchSessions.orEmpty(),
+                    complete = current?.rewatchSessionsComplete ?: false,
                 )
             }
         }
@@ -120,11 +131,9 @@ internal class SimklSyncEngine(
         // into the sessions already on the snapshot. The unpaired full read stays for the initial
         // sync, and for the recovery a Sync now can ask for while there is no session to merge
         // into (a snapshot that never read, or one a wipe left empty).
-        val dateFrom = if (current == null || (forceRewatchRead && current.rewatchSessions.isEmpty())) {
-            null
-        } else {
-            current.watermark
-        }
+        // Only a completed read may be continued as a delta. A snapshot from before this feature,
+        // or one whose read failed, carries an empty list that a delta would never fill.
+        val dateFrom = current?.takeIf { it.rewatchSessionsComplete }?.watermark
         return runCatching {
             val read = remote.fetchRewatchSessions(dateFrom)
             val sessions = mergeRewatchSessions(read, current?.rewatchSessions.orEmpty())
@@ -135,12 +144,14 @@ internal class SimklSyncEngine(
                     offerRuns = true,
                 ),
                 sessions = sessions,
+                complete = true,
             )
         }.getOrElse { error ->
             log.w { "Simkl rewatch sessions could not be read: ${error.message}" }
             SimklRewatchRead(
                 runs = current?.rewatchRuns.orEmpty(),
                 sessions = current?.rewatchSessions.orEmpty(),
+                complete = current?.rewatchSessionsComplete ?: false,
             )
         }
     }

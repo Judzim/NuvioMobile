@@ -198,6 +198,13 @@ data class SimklSyncSnapshot(
      * re-derive them without another read of the account.
      */
     val rewatchSessions: List<SimklLibraryEntry> = emptyList(),
+    /**
+     * Whether [rewatchSessions] is the whole set the account holds.
+     *
+     * False on a snapshot from before this feature, or after a read that failed: the next sync then
+     * reads without `date_from` instead of taking a delta that would never mention the old sessions.
+     */
+    val rewatchSessionsComplete: Boolean = false,
     val lastSyncedAtEpochMs: Long? = null,
     val lastCheckedAtEpochMs: Long? = null,
 )

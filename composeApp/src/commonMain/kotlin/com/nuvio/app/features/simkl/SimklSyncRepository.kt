@@ -254,9 +254,9 @@ object SimklSyncRepository : TrackingProfileStore {
         // What the caller read is a delta outside the initial sync (it was paired with the sync
         // watermark): it carries the changed items only, so merging it keeps the sessions of the
         // items it did not mention. A full read merges the same way: it mentions every item, which
-        // makes the read the whole set again.
-        val merged = mergeRewatchSessions(sessions, _state.value.snapshot.rewatchSessions)
-        persistRewatchSessions(merged)
+        // makes the read the whole set again. The merge runs under the snapshot lock, against the
+        // sessions it is actually replacing, so a sync that lands in between is not overwritten.
+        persistRewatchSessions { stored -> mergeRewatchSessions(sessions, stored) }
     }
 
     /**
@@ -265,22 +265,14 @@ object SimklSyncRepository : TrackingProfileStore {
      */
     internal suspend fun dropRewatchSession(sessionId: Long) {
         ensureLoaded()
-        val remaining = _state.value.snapshot.rewatchSessions
-            .filterNot { session -> session.rewatchId == sessionId }
-        persistRewatchSessions(remaining)
+        persistRewatchSessions { stored ->
+            stored.filterNot { session -> session.rewatchId == sessionId }
+        }
     }
 
-    private suspend fun persistRewatchSessions(runningSessions: List<SimklLibraryEntry>) {
-        val runs = runCatching {
-            deriveSimklRewatchRuns(
-                entries = runningSessions,
-                animeIdPreference = TrackingSettingsRepository.uiState.value.simklAnimeIdPreference,
-                offerRuns = TrackingSettingsRepository.uiState.value.simklRewatchMode != SimklRewatchMode.OFF,
-            )
-        }.getOrElse { error ->
-            log.w { "Could not read the runs out of the rewatch sessions: ${error.message}" }
-            return
-        }
+    private suspend fun persistRewatchSessions(
+        transform: (List<SimklLibraryEntry>) -> List<SimklLibraryEntry>,
+    ) {
         val generation = profileGeneration
         val profileId = ProfileRepository.activeProfileId
         snapshotMutex.withLock {
@@ -288,6 +280,17 @@ object SimklSyncRepository : TrackingProfileStore {
                 return@withLock
             }
             val current = _state.value
+            val runningSessions = transform(current.snapshot.rewatchSessions)
+            val runs = runCatching {
+                deriveSimklRewatchRuns(
+                    entries = runningSessions,
+                    animeIdPreference = TrackingSettingsRepository.uiState.value.simklAnimeIdPreference,
+                    offerRuns = TrackingSettingsRepository.uiState.value.simklRewatchMode != SimklRewatchMode.OFF,
+                )
+            }.getOrElse { error ->
+                log.w { "Could not read the runs out of the rewatch sessions: ${error.message}" }
+                return@withLock
+            }
             if (
                 current.snapshot.rewatchRuns == runs &&
                 current.snapshot.rewatchSessions == runningSessions
@@ -343,6 +346,8 @@ object SimklSyncRepository : TrackingProfileStore {
     }
 
     override fun onProfileChanged() {
+        // The answers belong to the profile that gave them: a profile switch starts from nothing.
+        SimklRewatchConsentRepository.clear()
         profileGeneration += 1L
         hasLoaded = false
         _state.value = SimklSyncUiState()
