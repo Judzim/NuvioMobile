@@ -15,6 +15,7 @@ class WatchingPoliciesTest {
         assertEquals(null, completionFractionFor(null))
         assertEquals(0.96, completionFractionFor(96.0))
         // A marker that is not a position in the video is not usable either, and the percentage decides.
+        // Zero is the case the tolerance can produce, by reading the margin off past the start.
         assertEquals(null, completionFractionFor(0.0))
         assertEquals(null, completionFractionFor(-5.0))
         assertEquals(null, completionFractionFor(Double.NaN))

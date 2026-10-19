@@ -40,7 +40,9 @@ fun shouldStoreProgress(
  */
 internal fun completionFractionFor(contentEndPercent: Double?): Double? =
     contentEndPercent
-        ?.takeIf { percent -> percent.isFinite() }
+        // A marker at the very start is not a point the content can be finished at: read with its
+        // tolerance the margin can land on zero, and every playback would then be a finished one.
+        ?.takeIf { percent -> percent.isFinite() && percent > 0.0 }
         ?.let { percent -> percent / 100.0 }
         ?.takeIf { fraction -> fraction in 0.0..1.0 }
 
