@@ -271,19 +271,12 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         // back in the background and adopt the derived runs; a failure must not turn a recorded mark
         // into an error. A settlement predicate keeps the read going until the episode shows up.
         val target = resolved.firstOrNull { item -> item.isRewatch }?.media
+        val targetContentId = target?.catalog?.contentId?.takeIf(String::isNotBlank)
         val targetSeason = target?.episode?.season
         val targetEpisode = target?.episode?.number
-        if (result.isComplete && target != null && targetSeason != null && targetEpisode != null) {
-            val targetSimkl = target.toSimklMedia()
+        if (result.isComplete && targetContentId != null && targetSeason != null && targetEpisode != null) {
             refreshRewatchSessions { sessions ->
-                sessions.any { entry ->
-                    entry.isRewatch &&
-                        entry.isRunningRewatchSession() &&
-                        entry.media?.matchesTarget(targetSimkl) == true &&
-                        entry.rewatchedEpisodes.any { episode ->
-                            episode.seasonNumber == targetSeason && episode.episodeNumber == targetEpisode
-                        }
-                }
+                sessions.rewatchedEpisodesOf(targetContentId).contains(targetSeason to targetEpisode)
             }
         }
         return result
