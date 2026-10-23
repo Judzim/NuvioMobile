@@ -367,7 +367,11 @@ private fun PlayerScreenRuntime.RenderPlayerControls(displayedPositionMs: Long, 
                             sourceHeaders = activeSourceHeaders,
                             resumePositionMs = playbackSnapshot.positionMs,
                             durationMs = playbackSnapshot.durationMs.takeIf { it > 0L },
-                            playbackSession = playbackSession,
+                            // The external result is judged by where this playback began, not by the
+                            // player's 80 percent bar alone.
+                            playbackSession = playbackSession.copy(
+                                startPositionMs = playbackSnapshot.positionMs,
+                            ),
                             subtitles = loadedSubtitles,
                             season = activeSeasonNumber,
                             episode = activeEpisodeNumber,
