@@ -249,6 +249,23 @@ class SimklRewatchRunsTest {
     }
 
     @Test
+    fun `the session holding the episode is the one a removal names`() {
+        val sessions = listOf(
+            session(id = 41, status = "active"),
+            session(id = 42, status = "active").copy(
+                seasons = listOf(
+                    SimklSeason(number = 2, episodes = listOf(SimklEpisode(number = 6, watchedAt = OLD))),
+                ),
+            ),
+        )
+        val target = episode()
+
+        assertEquals(41L, sessions.activeRewatchSessionIdForEpisode(target, seasonNumber = 2, episodeNumber = 7))
+        assertEquals(42L, sessions.activeRewatchSessionIdForEpisode(target, seasonNumber = 2, episodeNumber = 6))
+        assertNull(sessions.activeRewatchSessionIdForEpisode(target, seasonNumber = 2, episodeNumber = 5))
+    }
+
+    @Test
     fun `a session that is not running, not this item or not a session is never joined`() {
         val target = episode()
 

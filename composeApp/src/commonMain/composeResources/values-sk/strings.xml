@@ -1193,8 +1193,11 @@
     <string name="episode_mark_unwatched">Označiť ako nepozreté</string>
     <string name="episode_mark_watched">Označiť ako pozreté</string>
     <string name="episode_mark_rewatched">Označiť ako opakované pozretie</string>
+    <string name="episode_mark_not_rewatched">Zrušiť opakované pozretie</string>
     <string name="episode_mark_rewatched_done">Označené ako opakované pozretie</string>
     <string name="episode_mark_rewatched_failed">Nepodarilo sa označiť ako opakované pozretie</string>
+    <string name="episode_mark_not_rewatched_done">Opakované pozretie zrušené</string>
+    <string name="episode_mark_not_rewatched_failed">Nepodarilo sa zrušiť opakované pozretie</string>
     <string name="home_continue_watching_up_next">Ďalšia epizóda</string>
     <string name="home_continue_watching_watched">%1$s pozreté</string>
     <string name="home_continue_watching_hours_minutes_left">Zostáva %1$dh %2$dm</string>

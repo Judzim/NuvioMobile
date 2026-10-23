@@ -1,5 +1,6 @@
 package com.nuvio.app.features.player
 
+import com.nuvio.app.features.player.skip.ContentEndToleranceSeconds
 import com.nuvio.app.features.tracking.TRACKING_COMPLETION_BAR_PERCENT
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.tracking.TrackingScrobbleCoordinator
@@ -32,9 +33,21 @@ internal fun PlayerLaunch.externalPlaybackSession(): WatchProgressPlaybackSessio
     startPositionMs = initialPositionMs,
 )
 
+internal fun externalContentEndPercent(
+    contentEndSeconds: Double?,
+    durationMs: Long,
+): Double? {
+    val seconds = contentEndSeconds?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+    if (durationMs <= 0L) return null
+    val markerPercent = seconds * 1_000.0 / durationMs.toDouble() * 100.0
+    val tolerancePercent = ContentEndToleranceSeconds * 1_000.0 / durationMs.toDouble() * 100.0
+    return (markerPercent - tolerancePercent).coerceAtLeast(0.0)
+}
+
 internal suspend fun recordExternalPlaybackProgress(
     result: ExternalPlaybackResult,
     fallbackSession: WatchProgressPlaybackSession?,
+    contentEndSeconds: Double? = null,
 ) {
     val session = result.playbackSession ?: fallbackSession ?: return
     // A completed playback may carry no position at all (MX Player), so only drop position-less
@@ -42,6 +55,7 @@ internal suspend fun recordExternalPlaybackProgress(
     if (result.positionMs <= 0L && result.endedByUser) return
     val durationMs = result.durationMs
     if (durationMs != null && isShortPlaceholderDuration(durationMs)) return
+    val contentEndPercent = externalContentEndPercent(contentEndSeconds, durationMs ?: 0L)
     WatchProgressRepository.upsertPlaybackProgress(
         session = session,
         snapshot = PlayerPlaybackSnapshot(
@@ -51,6 +65,7 @@ internal suspend fun recordExternalPlaybackProgress(
             durationMs = durationMs ?: 0L,
             positionMs = result.positionMs,
         ),
+        contentEndPercent = contentEndPercent,
     )
     val media = buildTrackingMediaReference(
         contentType = session.parentMetaType,
@@ -87,6 +102,7 @@ internal suspend fun recordExternalPlaybackProgress(
                     event = TrackingScrobbleEvent(
                         media = media,
                         progressPercent = progressPercent,
+                        contentEndPercent = contentEndPercent,
                         startProgressPercent = startProgressPercent,
                         hasPlaybackSession = !startedAboveCompletionBar,
                         playbackId = nextScrobblePlaybackId(),

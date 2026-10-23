@@ -126,6 +126,22 @@ class SimklMutationRepositoryTest {
     }
 
     @Test
+    fun `rewatch removal names the session and keeps the episode coordinates`() {
+        val body = buildSimklRewatchRemovalBody(
+            items = listOf(show(TrackingEpisode(season = 1, number = 2))),
+            rewatchId = 8975L,
+        ).asObject()
+
+        val item = body.getValue("shows").jsonArray.single().jsonObject
+        assertEquals("8975", item.getValue("rewatch_id").jsonPrimitive.content)
+        assertNull(item["is_rewatch"])
+        assertNull(item["status"])
+        val episode = item.getValue("seasons").jsonArray.single().jsonObject
+            .getValue("episodes").jsonArray.single().jsonObject
+        assertEquals(2, episode.getValue("number").jsonPrimitive.content.toInt())
+    }
+
+    @Test
     fun `scrobble payload clamps progress and uses type-specific wrappers`() {
         val movieBody = buildSimklScrobbleBody(
             TrackingScrobbleEvent(movie(), progressPercent = 105.129),

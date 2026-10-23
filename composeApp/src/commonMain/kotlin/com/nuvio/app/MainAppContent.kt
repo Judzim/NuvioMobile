@@ -683,12 +683,19 @@ internal fun MainAppContent(
     }
     var resumePromptItem by remember { mutableStateOf<ContinueWatchingItem?>(null) }
     var lastExternalPlayerLaunch by remember { mutableStateOf<PlayerLaunch?>(null) }
+    var pendingExternalContentEndSeconds by remember { mutableStateOf<Double?>(null) }
     val activePlaybackProfileId = profileState.activeProfile?.profileIndex ?: ProfileRepository.activeProfileId
     val launchExternalPlayer = rememberExternalPlayerLauncher { result ->
         if (result != null) {
             val fallbackSession = lastExternalPlayerLaunch?.externalPlaybackSession()
+            val contentEndSeconds = pendingExternalContentEndSeconds
+            pendingExternalContentEndSeconds = null
             coroutineScope.launch {
-                recordExternalPlaybackProgress(result, fallbackSession)
+                recordExternalPlaybackProgress(
+                    result = result,
+                    fallbackSession = fallbackSession,
+                    contentEndSeconds = contentEndSeconds,
+                )
                 result.callbackId?.let(infusePlaybackCallbacks::consume)
             }
         }
@@ -812,6 +819,7 @@ internal fun MainAppContent(
                 onOverlayMessage = { message -> StreamsRepository.setOverlayVisible(true, message) },
             )
             StreamsRepository.setOverlayVisible(false)
+            pendingExternalContentEndSeconds = enrichedRequest.contentEndSeconds
             return when (
                 val intentResult = ExternalPlayerPlatform.buildIntent(
                     request = enrichedRequest,

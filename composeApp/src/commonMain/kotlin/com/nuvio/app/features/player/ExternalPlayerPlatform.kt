@@ -25,6 +25,8 @@ data class ExternalPlayerPlaybackRequest(
     val episodeTitle: String? = null,
     // JSON array of episode/movie skip segments, passed to players that support segment skipping.
     val skipSegmentsJson: String? = null,
+    // Where the content really ends, carried from the launch so the return can judge completion.
+    val contentEndSeconds: Double? = null,
     val durationMs: Long? = null,
     val playbackSession: WatchProgressPlaybackSession? = null,
 ) {

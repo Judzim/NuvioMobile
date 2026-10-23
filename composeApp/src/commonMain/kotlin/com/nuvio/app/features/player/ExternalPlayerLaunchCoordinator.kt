@@ -19,6 +19,13 @@ import org.jetbrains.compose.resources.getString
 
 private const val SkipSegmentResolveTimeoutMs = 4_000L
 
+private val ContentEndSegmentTypes = setOf("outro", "ed", "mixed-ed", "movie-credits")
+
+private data class ResolvedSkipSegments(
+    val json: String,
+    val contentEndSeconds: Double?,
+)
+
 // Skip resolution runs on an app-lifetime scope rather than the caller's (often
 // composition-bound) scope, so navigating to the external player cannot cancel an
 // in-flight network lookup partway through.
@@ -87,8 +94,11 @@ suspend fun prepareExternalPlayerLaunch(
     subtitlesDeferred?.await()?.let { subtitles ->
         result = result.copy(subtitles = subtitles)
     }
-    skipSegmentsDeferred?.await()?.let { skipSegmentsJson ->
-        result = result.copy(skipSegmentsJson = skipSegmentsJson)
+    skipSegmentsDeferred?.await()?.let { resolved ->
+        result = result.copy(
+            skipSegmentsJson = resolved.json,
+            contentEndSeconds = resolved.contentEndSeconds,
+        )
     }
 
     return@coroutineScope result
@@ -109,7 +119,7 @@ private suspend fun resolveSkipSegmentsJson(
     season: Int?,
     episode: Int?,
     contentId: String?,
-): String? {
+): ResolvedSkipSegments? {
     val imdbFromContent = contentId?.takeIf { it.startsWith("tt") }
     val intervals = skipResolveScope.async {
         withTimeoutOrNull(SkipSegmentResolveTimeoutMs) {
@@ -138,7 +148,13 @@ private suspend fun resolveSkipSegmentsJson(
     }.await()
 
     if (intervals.isNullOrEmpty()) return null
-    return intervals.toSkipSegmentsJson()
+    return ResolvedSkipSegments(
+        json = intervals.toSkipSegmentsJson(),
+        contentEndSeconds = intervals
+            .filter { interval -> interval.type in ContentEndSegmentTypes }
+            .minOfOrNull { interval -> interval.startTime }
+            ?.takeIf { seconds -> seconds.isFinite() && seconds > 0.0 },
+    )
 }
 
 internal fun List<SkipInterval>.toSkipSegmentsJson(): String =

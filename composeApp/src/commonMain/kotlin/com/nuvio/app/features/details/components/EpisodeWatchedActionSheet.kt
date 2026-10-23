@@ -44,6 +44,7 @@ fun EpisodeWatchedActionSheet(
     onDismiss: () -> Unit,
     onToggleWatched: () -> Unit,
     onMarkRewatched: () -> Unit = {},
+    onUnmarkRewatched: () -> Unit = {},
     onTogglePreviousWatched: () -> Unit,
     onToggleSeasonWatched: () -> Unit,
     showPlayManually: Boolean = false,
@@ -70,26 +71,33 @@ fun EpisodeWatchedActionSheet(
                 seasonLabel = seasonLabel,
             )
             NuvioBottomSheetDivider()
-            NuvioBottomSheetActionRow(
-                icon = Icons.Default.CheckCircle,
-                title = if (isEpisodeWatched) {
-                    stringResource(Res.string.episode_mark_unwatched)
-                } else {
-                    stringResource(Res.string.episode_mark_watched)
-                },
-                onClick = {
-                    onToggleWatched()
-                    coroutineScope.launch {
-                        dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss)
-                    }
-                },
-            )
-            if (isEpisodeWatched && hasActiveRewatch && !isEpisodeRewatched) {
+            if (isEpisodeWatched && hasActiveRewatch) {
                 NuvioBottomSheetActionRow(
                     icon = Icons.Default.CheckCircle,
-                    title = stringResource(Res.string.episode_mark_rewatched),
+                    title = stringResource(
+                        if (isEpisodeRewatched) Res.string.episode_mark_not_rewatched
+                        else Res.string.episode_mark_rewatched,
+                    ),
                     onClick = {
-                        onMarkRewatched()
+                        if (isEpisodeRewatched) onUnmarkRewatched() else onMarkRewatched()
+                        coroutineScope.launch {
+                            dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss)
+                        }
+                    },
+                )
+            }
+            // A recorded rewatch owns the episode until it is removed: only the rewatch action
+            // shows, and the original watch can be cleared after the rewatch is gone.
+            if (!isEpisodeRewatched) {
+                NuvioBottomSheetActionRow(
+                    icon = Icons.Default.CheckCircle,
+                    title = if (isEpisodeWatched) {
+                        stringResource(Res.string.episode_mark_unwatched)
+                    } else {
+                        stringResource(Res.string.episode_mark_watched)
+                    },
+                    onClick = {
+                        onToggleWatched()
                         coroutineScope.launch {
                             dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss)
                         }

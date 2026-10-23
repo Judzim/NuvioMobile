@@ -30,6 +30,8 @@ internal sealed interface SimklCommittedMutation {
     data class RemoveFromHistory(
         val items: List<TrackingMediaReference>,
         val deleted: SimklDeletedCounts,
+        /** Set when the removal addressed one rewatch session, not the canonical watch. */
+        val rewatchId: Long? = null,
     ) : SimklCommittedMutation
 }
 
@@ -137,6 +139,7 @@ internal fun SimklApiResponse.toHistoryMutationReceipt(
 internal fun SimklApiResponse.toHistoryRemovalReceipt(
     candidates: List<TrackingMediaReference>,
     json: Json,
+    rewatchId: Long? = null,
 ): SimklMutationReceipt {
     val payload = payload(json)
     val result = payload.toTrackingMutationResult(candidates.size)
@@ -154,6 +157,7 @@ internal fun SimklApiResponse.toHistoryRemovalReceipt(
                 shows = deleted?.intValue("shows") ?: 0,
                 episodes = deleted?.intValue("episodes") ?: 0,
             ),
+            rewatchId = rewatchId,
         ),
         requiresReconciliation = accepted.any { candidate ->
             candidate.kind != TrackingMediaKind.MOVIE && candidate.episode != null

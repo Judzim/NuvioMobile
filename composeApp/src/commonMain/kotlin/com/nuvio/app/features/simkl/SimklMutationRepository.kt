@@ -114,6 +114,31 @@ internal class SimklMutationService(
     }
 
     /**
+     * Removes one episode from a named rewatch session, leaving the canonical watch in place.
+     *
+     * The removal endpoint accepts the session id next to the episode coordinates; a request without
+     * it addresses the episode's canonical watch instead.
+     */
+    suspend fun removeRewatchFromHistory(
+        items: Collection<TrackingMediaReference>,
+        rewatchId: Long,
+    ): TrackingMutationResult {
+        val candidates = items.validated()
+        if (candidates.isEmpty()) return TrackingMutationResult(attemptedCount = 0)
+        val response = client.execute(
+            SimklApiRequest(
+                method = SimklHttpMethod.POST,
+                path = "/sync/history/remove",
+                body = buildSimklRewatchRemovalBody(candidates, rewatchId, json),
+                retryPolicy = SimklRetryPolicy.SYNC_WRITE,
+            ),
+        )
+        val receipt = response.toHistoryRemovalReceipt(candidates, json, rewatchId)
+        onMutationCommitted(receipt)
+        return receipt.result
+    }
+
+    /**
      * Moves a running rewatch session to `closed`, which is how a run is dropped.
      *
      * The transition is documented on Simkl's rewatches guide: the session keeps its watched episodes
@@ -288,6 +313,44 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
     ): TrackingMutationResult {
         if (!isActiveProfile(profileId)) return TrackingMutationResult(attemptedCount = 0)
         return service.removeFromHistory(items)
+    }
+
+    /**
+     * Removes one episode from the running rewatch session that holds it, leaving the original watch.
+     *
+     * The session id is read from the same stored sessions the detail screen marks the episode from.
+     * A removal that cannot name one is not sent: without the id Simkl would clear the canonical
+     * watch instead.
+     */
+    suspend fun removeRewatchFromHistory(
+        profileId: Int,
+        items: Collection<TrackingMediaReference>,
+    ): TrackingMutationResult? {
+        if (!isActiveProfile(profileId)) return null
+        SimklSyncRepository.ensureLoaded()
+        val snapshot = SimklSyncRepository.state.value.snapshot
+        val candidates = items.map { media ->
+            snapshot.enrichMediaReference(media).resolveAnimeEpisodeForSimkl()
+        }
+        val media = candidates.singleOrNull() ?: return null
+        val episode = media.episode ?: return null
+        val season = episode.season ?: return null
+        val rewatchId = snapshot.rewatchSessions.activeRewatchSessionIdForEpisode(
+            media = media,
+            seasonNumber = season,
+            episodeNumber = episode.number,
+        ) ?: return null
+        val result = service.removeRewatchFromHistory(candidates, rewatchId)
+        if (result.isComplete) {
+            SimklSyncRepository.refreshRewatchRuns()
+        }
+        val contentId = media.catalog?.contentId?.takeIf(String::isNotBlank) ?: return result
+        if (result.isComplete) {
+            refreshRewatchSessions { sessions ->
+                !sessions.rewatchedEpisodesOf(contentId).contains(season to episode.number)
+            }
+        }
+        return result
     }
 
     /**
@@ -549,6 +612,25 @@ internal fun buildSimklHistoryRemovalBody(
 ): String = json.encodeToString(
     buildHistoryRequest(
         items = items.map { media -> TrackingHistoryItem(media = media) },
+        includeWatchedAt = false,
+        isRewatch = false,
+    ),
+)
+
+/**
+ * Removes one viewing from a named rewatch session.
+ *
+ * The session id rides on the show entry, next to the episode coordinates, which is the shape
+ * Simkl's history removal accepts. Without the id the same request would clear the canonical watch
+ * and leave the rewatch behind.
+ */
+internal fun buildSimklRewatchRemovalBody(
+    items: Collection<TrackingMediaReference>,
+    rewatchId: Long,
+    json: Json = SimklMutationJson,
+): String = json.encodeToString(
+    buildHistoryRequest(
+        items = items.map { media -> TrackingHistoryItem(media = media, rewatchId = rewatchId) },
         includeWatchedAt = false,
         isRewatch = false,
     ),

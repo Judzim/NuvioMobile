@@ -1424,6 +1424,8 @@ fun MetaDetailsScreen(
                             }
                             val rewatchedToast = stringResource(Res.string.episode_mark_rewatched_done)
                             val rewatchedErrorToast = stringResource(Res.string.episode_mark_rewatched_failed)
+                            val rewatchRemovedToast = stringResource(Res.string.episode_mark_not_rewatched_done)
+                            val rewatchRemoveErrorToast = stringResource(Res.string.episode_mark_not_rewatched_failed)
                             val isSelectedEpisodeRewatched = selectedEpisode.season?.let { season ->
                                 selectedEpisode.episode?.let { episode -> season to episode }
                             }?.let { key -> key in rewatchEpisodes } == true
@@ -1450,6 +1452,13 @@ fun MetaDetailsScreen(
                                     WatchingActions.markEpisodeRewatched(meta, selectedEpisode) { marked ->
                                         NuvioToastController.show(
                                             if (marked) rewatchedToast else rewatchedErrorToast,
+                                        )
+                                    }
+                                },
+                                onUnmarkRewatched = {
+                                    WatchingActions.removeEpisodeRewatch(meta, selectedEpisode) { removed ->
+                                        NuvioToastController.show(
+                                            if (removed) rewatchRemovedToast else rewatchRemoveErrorToast,
                                         )
                                     }
                                 },

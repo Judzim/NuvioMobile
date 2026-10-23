@@ -150,6 +150,40 @@ object WatchingActions {
         }
     }
 
+    /**
+     * Removes one episode from the running Simkl rewatch session, leaving the original watch.
+     *
+     * The session id is resolved by the Simkl writer from the account snapshot. A null result means
+     * the account holds no running session for the episode, so the caller reports a failure.
+     */
+    fun removeEpisodeRewatch(
+        meta: MetaDetails,
+        episode: MetaVideo,
+        onResult: (Boolean) -> Unit = {},
+    ) {
+        val season = episode.season ?: return
+        val number = episode.episode ?: return
+        actionScope.launch {
+            val media = buildTrackingMediaReference(
+                contentType = meta.type,
+                parentMetaId = meta.id,
+                videoId = episode.id,
+                title = meta.name,
+                releaseInfo = meta.releaseInfo,
+                seasonNumber = season,
+                episodeNumber = number,
+                episodeTitle = episode.title,
+            )
+            val result = runCatching {
+                SimklMutationRepository.removeRewatchFromHistory(
+                    profileId = ProfileRepository.activeProfileId,
+                    items = listOf(media),
+                )
+            }.getOrNull()
+            onResult(result?.isComplete == true)
+        }
+    }
+
     fun togglePreviousEpisodesWatched(
         meta: MetaDetails,
         episodes: Collection<MetaVideo>,

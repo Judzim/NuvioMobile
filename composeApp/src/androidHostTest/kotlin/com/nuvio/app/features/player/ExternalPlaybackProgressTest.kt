@@ -64,11 +64,33 @@ class ExternalPlaybackProgressTest {
     }
 
     @Test
+    fun externalContentEndReadsTheMarkerFiveSecondsEarly() {
+        val percent = assertNotNull(
+            externalContentEndPercent(contentEndSeconds = 3_300.0, durationMs = 3_600_000L),
+        )
+        assertEquals(91.5277, percent, 0.001)
+        assertNull(externalContentEndPercent(contentEndSeconds = null, durationMs = 3_600_000L))
+        assertNull(externalContentEndPercent(contentEndSeconds = 3_300.0, durationMs = 0L))
+    }
+
+    @Test
     fun infuseUsesKnownDurationToRecognizeCompletion() = runBlocking {
         recordExternalPlaybackProgress(infuseResult(3300, 3_600_000L), fallbackSession = null)
         val entry = assertNotNull(WatchProgressRepository.progressForVideo("tt123"))
         assertTrue(entry.isCompleted)
         assertEquals(3_600_000L, entry.durationMs)
+    }
+
+    @Test
+    fun externalContentEndCompletesLocalProgressBeforeTheNinetyPercentBar() = runBlocking {
+        recordExternalPlaybackProgress(
+            result = infuseResult(3170, 3_600_000L),
+            fallbackSession = null,
+            contentEndSeconds = 3150.0,
+        )
+        val entry = assertNotNull(WatchProgressRepository.progressForVideo("tt123"))
+        assertTrue(entry.isCompleted)
+        assertFalse(entry.isResumable)
     }
 
     @Test
