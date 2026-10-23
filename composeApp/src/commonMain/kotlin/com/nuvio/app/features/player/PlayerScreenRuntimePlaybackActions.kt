@@ -175,6 +175,7 @@ internal fun PlayerScreenRuntime.resetIdentityStateIfNeeded() {
         pendingSeekScrobbleRestart = false
         hasSentCompletionScrobbleForCurrentItem = false
         hasOpenedScrobbleSessionForCurrentItem = false
+        scrobbleStartProgressPercent = null
         currentTrackingMedia = null
         scrobblePlaybackId = nextScrobblePlaybackId()
     }
@@ -248,6 +249,8 @@ internal fun PlayerScreenRuntime.emitTrackingScrobbleStart() {
     // The run has a session from here on, even if a pause later closes the one that is open.
     hasOpenedScrobbleSessionForCurrentItem = true
     if (hasRequestedScrobbleStartForCurrentItem) return
+    // The first start of this stretch fixes where it began; later progress updates must not move it.
+    scrobbleStartProgressPercent = currentProgress.toDouble()
     // A new session is a new viewing: the completion latch of the run that ended before this one
     // must not suppress this run's own end.
     hasSentCompletionScrobbleForCurrentItem = false
@@ -297,6 +300,7 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleStartAboveCompletionBar(prog
         return
     }
     hasSentStartAboveCompletionBarForCurrentItem = true
+    scrobbleStartProgressPercent = progressPercent.toDouble()
     // A new stretch of the playback has its own end, so a completion of the stretch before it does
     // not suppress this one. It still opens no session: the stop above the bar must not ask for a
     // rewatch for a viewing that was already past the bar when it began.
@@ -375,6 +379,7 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
     // even when it stopped below the percentage the user set. Snapshot here, before the write leaves,
     // because the marker and the duration belong to this playback, not to the request.
     val contentEndPercent = currentContentEndPercent()
+    val startProgressPercent = scrobbleStartProgressPercent
     val hasPlaybackSession = hasOpenedScrobbleSessionForCurrentItem
     val playbackId = scrobblePlaybackId
     scope.launch(NonCancellable) {
@@ -387,6 +392,7 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
                 media = media,
                 progressPercent = percent.toDouble(),
                 contentEndPercent = contentEndPercent,
+                startProgressPercent = startProgressPercent,
                 sessionless = sessionless,
                 hasPlaybackSession = hasPlaybackSession,
                 playbackId = playbackId,

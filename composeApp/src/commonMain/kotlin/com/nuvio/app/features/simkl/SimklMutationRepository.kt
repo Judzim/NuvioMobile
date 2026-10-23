@@ -266,7 +266,27 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
                 item.copy(media = enriched)
             }
         }
-        return service.addToHistory(resolved)
+        val result = service.addToHistory(resolved)
+        // The run this mark opened or extended is not in the snapshot until a read sees it. Read it
+        // back in the background and adopt the derived runs; a failure must not turn a recorded mark
+        // into an error. A settlement predicate keeps the read going until the episode shows up.
+        val target = resolved.firstOrNull { item -> item.isRewatch }?.media
+        val targetSeason = target?.episode?.season
+        val targetEpisode = target?.episode?.number
+        if (result.isComplete && target != null && targetSeason != null && targetEpisode != null) {
+            val targetSimkl = target.toSimklMedia()
+            refreshRewatchSessions { sessions ->
+                sessions.any { entry ->
+                    entry.isRewatch &&
+                        entry.isRunningRewatchSession() &&
+                        entry.media?.matchesTarget(targetSimkl) == true &&
+                        entry.rewatchedEpisodes.any { episode ->
+                            episode.seasonNumber == targetSeason && episode.episodeNumber == targetEpisode
+                        }
+                }
+            }
+        }
+        return result
     }
 
     override suspend fun removeFromHistory(
@@ -343,6 +363,11 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             SimklRewatchConsentRepository.releaseGrant(media)
         }
 
+        val playbackHadSession = simklPlaybackHadSession(
+            hasPlaybackSession = event.hasPlaybackSession,
+            startProgressPercent = event.startProgressPercent,
+            completionThresholdPercent = completionThresholdPercent,
+        )
         val recordRewatch = shouldRecordSimklRewatchOnStop(
             mode = mode,
             accountType = accountType,
@@ -351,7 +376,7 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             completionThresholdPercent = completionThresholdPercent,
             hasRunningSession = runningSessionId != null,
             consented = SimklRewatchConsentRepository.grantedFor(media),
-            hasPlaybackSession = event.hasPlaybackSession,
+            hasPlaybackSession = playbackHadSession,
         )
         val result = service.scrobble(
             action = action,

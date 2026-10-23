@@ -54,6 +54,38 @@ class SimklRewatchPolicyTest {
     }
 
     @Test
+    fun `a sessionless resume still had a session when it began below the threshold`() {
+        assertTrue(
+            simklPlaybackHadSession(
+                hasPlaybackSession = true,
+                startProgressPercent = null,
+                completionThresholdPercent = 90.0,
+            ),
+        )
+        assertTrue(
+            simklPlaybackHadSession(
+                hasPlaybackSession = false,
+                startProgressPercent = 82.0,
+                completionThresholdPercent = 90.0,
+            ),
+        )
+        assertFalse(
+            simklPlaybackHadSession(
+                hasPlaybackSession = false,
+                startProgressPercent = 92.0,
+                completionThresholdPercent = 90.0,
+            ),
+        )
+        assertFalse(
+            simklPlaybackHadSession(
+                hasPlaybackSession = false,
+                startProgressPercent = null,
+                completionThresholdPercent = 90.0,
+            ),
+        )
+    }
+
+    @Test
     fun `a playback that begins above the completion bar is not asked about`() {
         val nowEpochMs = 10_000_000_000L
         val watchedLongAgo = SimklPriorWatch(

@@ -4,6 +4,10 @@ import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.simkl.SimklMutationRepository
+import com.nuvio.app.features.tracking.TrackingHistoryItem
+import com.nuvio.app.features.tracking.buildTrackingMediaReference
+import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.watched.WatchedItem
 import com.nuvio.app.features.watched.WatchedRepository
 import com.nuvio.app.features.watched.episodePlaybackId
@@ -108,6 +112,42 @@ object WatchingActions {
             )
         }
         reconcileSeriesWatchedState(meta)
+    }
+
+    /**
+     * Marks a watched episode as a repeat viewing in Simkl only.
+     *
+     * The shared WatchedRepository path would write to Trakt and MDBList too, and a rewatch is
+     * Simkl's concept: the Simkl history writer owns the mode and plan gate and pins the running
+     * session, so the other trackers never see a second watch. The action is offered only for an
+     * episode the account already watched and a run that is open.
+     */
+    fun markEpisodeRewatched(
+        meta: MetaDetails,
+        episode: MetaVideo,
+        onResult: (Boolean) -> Unit = {},
+    ) {
+        val season = episode.season ?: return
+        val number = episode.episode ?: return
+        actionScope.launch {
+            val media = buildTrackingMediaReference(
+                contentType = meta.type,
+                parentMetaId = meta.id,
+                videoId = episode.id,
+                title = meta.name,
+                releaseInfo = meta.releaseInfo,
+                seasonNumber = season,
+                episodeNumber = number,
+                episodeTitle = episode.title,
+            )
+            val result = runCatching {
+                SimklMutationRepository.addToHistory(
+                    profileId = ProfileRepository.activeProfileId,
+                    items = listOf(TrackingHistoryItem(media = media)),
+                )
+            }.getOrNull()
+            onResult(result?.isComplete == true)
+        }
     }
 
     fun togglePreviousEpisodesWatched(

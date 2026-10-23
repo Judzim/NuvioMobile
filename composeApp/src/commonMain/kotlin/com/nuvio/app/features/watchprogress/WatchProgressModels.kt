@@ -227,6 +227,7 @@ data class WatchProgressPlaybackSession(
     val lastStreamSubtitle: String? = null,
     val pauseDescription: String? = null,
     val lastSourceUrl: String? = null,
+    val startPositionMs: Long = 0L,
 )
 
 data class ContinueWatchingItem(

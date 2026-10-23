@@ -36,11 +36,14 @@ fun EpisodeWatchedActionSheet(
     episode: MetaVideo,
     seasonLabel: String,
     isEpisodeWatched: Boolean,
+    isEpisodeRewatched: Boolean = false,
+    hasActiveRewatch: Boolean = false,
     canMarkPreviousEpisodes: Boolean,
     arePreviousEpisodesWatched: Boolean,
     isSeasonWatched: Boolean,
     onDismiss: () -> Unit,
     onToggleWatched: () -> Unit,
+    onMarkRewatched: () -> Unit = {},
     onTogglePreviousWatched: () -> Unit,
     onToggleSeasonWatched: () -> Unit,
     showPlayManually: Boolean = false,
@@ -81,6 +84,18 @@ fun EpisodeWatchedActionSheet(
                     }
                 },
             )
+            if (isEpisodeWatched && hasActiveRewatch && !isEpisodeRewatched) {
+                NuvioBottomSheetActionRow(
+                    icon = Icons.Default.CheckCircle,
+                    title = stringResource(Res.string.episode_mark_rewatched),
+                    onClick = {
+                        onMarkRewatched()
+                        coroutineScope.launch {
+                            dismissNuvioBottomSheet(sheetState = sheetState, onDismiss = onDismiss)
+                        }
+                    },
+                )
+            }
             if (canMarkPreviousEpisodes) {
                 NuvioBottomSheetActionRow(
                     icon = Icons.Default.DoneAll,

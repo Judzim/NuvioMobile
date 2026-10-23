@@ -66,6 +66,14 @@ data class TrackingScrobbleEvent(
      */
     val contentEndPercent: Double? = null,
     /**
+     * Where the playback began, in percent, when the player reported its start.
+     *
+     * A sessionless resume above the player's 80 percent bar still counts as a session for Simkl when
+     * this start is below Simkl's own completion threshold. Null means the start is unknown. Trakt and
+     * MDBList ignore it.
+     */
+    val startProgressPercent: Double? = null,
+    /**
      * A scrobble of a playback no session owns, for the trackers that keep a watching state of
      * their own.
      *

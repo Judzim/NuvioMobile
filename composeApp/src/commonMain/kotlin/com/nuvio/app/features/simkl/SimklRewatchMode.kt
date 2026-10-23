@@ -174,6 +174,20 @@ internal fun shouldRecordSimklRewatchOnStop(
 }
 
 /**
+ * Whether a playback had a session for Simkl, by where it began.
+ *
+ * A sessionless resume above the player's 80 percent bar still counts as a session when its start is
+ * below Simkl's own completion threshold: the playback began under the point that marks it finished,
+ * so the stop that ends it is a viewing that can be repeated.
+ */
+internal fun simklPlaybackHadSession(
+    hasPlaybackSession: Boolean,
+    startProgressPercent: Double?,
+    completionThresholdPercent: Double,
+): Boolean = hasPlaybackSession ||
+    (startProgressPercent != null && startProgressPercent < completionThresholdPercent)
+
+/**
  * Whether a manual mark of an item is written as a repeat viewing.
  *
  * A mark of something the account has already watched is a repeat, and Simkl records a plain add of it

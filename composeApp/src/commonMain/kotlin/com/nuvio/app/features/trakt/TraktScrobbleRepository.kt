@@ -140,13 +140,15 @@ internal object TraktScrobbleRepository : TrackingScrobbler {
             return
         }
         val item = buildItem(event.media) ?: return
-        sendScrobble(
+        val written = sendScrobble(
             profileId = profileId,
             action = action.wireValue,
             item = item,
             progressPercent = event.progressPercent.toFloat(),
         )
-        if (completesPlayback && event.playbackId != 0L) {
+        // Latch only a completion the tracker accepted: a failed stop must not suppress the stop
+        // that really ends the playback.
+        if (completesPlayback && written && event.playbackId != 0L) {
             lastCompletedPlaybackId = event.playbackId
         }
     }
@@ -254,12 +256,13 @@ internal object TraktScrobbleRepository : TrackingScrobbler {
         action: String,
         item: TraktScrobbleItem,
         progressPercent: Float,
-    ) {
-        if (ProfileRepository.activeProfileId != profileId) return
-        val headers = TraktAuthRepository.authorizedHeaders() ?: return
-        if (ProfileRepository.activeProfileId != profileId) return
+    ): Boolean {
+        if (ProfileRepository.activeProfileId != profileId) return false
+        val headers = TraktAuthRepository.authorizedHeaders() ?: return false
+        if (ProfileRepository.activeProfileId != profileId) return false
         val clampedProgress = progressPercent.coerceIn(0f, 100f)
-        if (shouldSkip(profileId, action, item.itemKey, clampedProgress)) return
+        // A skip here means this exact call was already sent successfully; it still counts as written.
+        if (shouldSkip(profileId, action, item.itemKey, clampedProgress)) return true
 
         val url = "$BASE_URL/scrobble/$action"
         val requestBody = json.encodeToString(buildRequestBody(item, clampedProgress))
@@ -307,7 +310,7 @@ internal object TraktScrobbleRepository : TrackingScrobbler {
                     delay(retryDelayMs * attempt)
                     continue
                 }
-                return
+                return false
             }
 
             log.d {
@@ -346,10 +349,10 @@ internal object TraktScrobbleRepository : TrackingScrobbler {
             log.w {
                 "Failed Trakt scrobble $action: HTTP ${response.status} ${response.statusText.ifBlank { "<no-status-text>" }}"
             }
-            return
+            return false
         }
 
-        if (!wasSent) return
+        if (!wasSent) return false
 
         lastScrobbleStamp = ScrobbleStamp(
             profileId = profileId,
@@ -366,6 +369,7 @@ internal object TraktScrobbleRepository : TrackingScrobbler {
                     log.w { "Failed to refresh Trakt progress after stop: ${error.message}" }
                 }
         }
+        return true
     }
 
     private fun buildRequestBody(

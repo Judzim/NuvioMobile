@@ -1,5 +1,6 @@
 package com.nuvio.app.features.player
 
+import com.nuvio.app.features.tracking.TRACKING_COMPLETION_BAR_PERCENT
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.tracking.TrackingScrobbleCoordinator
 import com.nuvio.app.features.tracking.TrackingScrobbleEvent
@@ -28,6 +29,7 @@ internal fun PlayerLaunch.externalPlaybackSession(): WatchProgressPlaybackSessio
     lastStreamSubtitle = streamSubtitle,
     pauseDescription = pauseDescription,
     lastSourceUrl = sourceUrl,
+    startPositionMs = initialPositionMs,
 )
 
 internal suspend fun recordExternalPlaybackProgress(
@@ -71,6 +73,13 @@ internal suspend fun recordExternalPlaybackProgress(
             } else {
                 (result.positionMs.toDouble() / knownDurationMs.toDouble() * 100).coerceIn(0.0, 100.0)
             }
+            val startProgressPercent = if (knownDurationMs > 0L && session.startPositionMs > 0L) {
+                session.startPositionMs.toDouble() / knownDurationMs.toDouble() * 100.0
+            } else {
+                null
+            }
+            val startedAboveCompletionBar = startProgressPercent != null &&
+                startProgressPercent >= TRACKING_COMPLETION_BAR_PERCENT
             runCatching {
                 TrackingScrobbleCoordinator.scrobble(
                     profileId = session.profileId,
@@ -78,7 +87,8 @@ internal suspend fun recordExternalPlaybackProgress(
                     event = TrackingScrobbleEvent(
                         media = media,
                         progressPercent = progressPercent,
-                        hasPlaybackSession = true,
+                        startProgressPercent = startProgressPercent,
+                        hasPlaybackSession = !startedAboveCompletionBar,
                         playbackId = nextScrobblePlaybackId(),
                     ),
                 )

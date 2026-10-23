@@ -163,6 +163,7 @@ internal class PlayerScreenRuntime(
     var hasSentCompletionScrobbleForCurrentItem by mutableStateOf(false)
     /** A playback session was opened for this item, even if a pause has since closed it. */
     var hasOpenedScrobbleSessionForCurrentItem by mutableStateOf(false)
+    var scrobbleStartProgressPercent by mutableStateOf<Double?>(null)
     var scrobblePlaybackId by mutableStateOf(0L)
     var currentTrackingMedia by mutableStateOf<TrackingMediaReference?>(null)
 

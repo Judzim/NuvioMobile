@@ -7,14 +7,14 @@ class MdbListScrobbleService(
     private val api: MdbListApiClient,
     private val sync: MdbListSyncRepository
 ) {
-    suspend fun scrobble(scope: MdbListAuthScope, action: TrackingScrobbleAction, event: TrackingScrobbleEvent) {
-        if (!event.progressPercent.isFinite() || event.media.ids.toMdbListIds() == null) return
-        sync.write(scope, setOf(MdbListSyncBucket.WATCHED, MdbListSyncBucket.PLAYBACK)) { snapshot ->
-            val target = snapshot.mutationTarget(event.media) ?: return@write snapshot to Unit
-            if (target.type == MdbListItemType.SHOW || !target.scrobbleCoordinatesResolved) return@write snapshot to Unit
+    suspend fun scrobble(scope: MdbListAuthScope, action: TrackingScrobbleAction, event: TrackingScrobbleEvent): Boolean {
+        if (!event.progressPercent.isFinite() || event.media.ids.toMdbListIds() == null) return false
+        return sync.write(scope, setOf(MdbListSyncBucket.WATCHED, MdbListSyncBucket.PLAYBACK)) { snapshot ->
+            val target = snapshot.mutationTarget(event.media) ?: return@write snapshot to false
+            if (target.type == MdbListItemType.SHOW || !target.scrobbleCoordinatesResolved) return@write snapshot to false
             val response = api.post("/scrobble/${action.wireValue}", target.scrobbleBody(event.progressPercent.coerceIn(0.0, 100.0)).toString(), scope)
             val receipt = decodeMdbListScrobbleReceipt(response, target, action, kotlin.time.Clock.System.now().toEpochMilliseconds())
-            snapshot.applyScrobble(receipt) to Unit
+            snapshot.applyScrobble(receipt) to true
         }
     }
 

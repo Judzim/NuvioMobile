@@ -1422,12 +1422,19 @@ fun MetaDetailsScreen(
                                     progressByVideoId = progressByVideoId,
                                 )
                             }
+                            val rewatchedToast = stringResource(Res.string.episode_mark_rewatched_done)
+                            val rewatchedErrorToast = stringResource(Res.string.episode_mark_rewatched_failed)
+                            val isSelectedEpisodeRewatched = selectedEpisode.season?.let { season ->
+                                selectedEpisode.episode?.let { episode -> season to episode }
+                            }?.let { key -> key in rewatchEpisodes } == true
                             EpisodeWatchedActionSheet(
                                 episode = selectedEpisode,
                                 seasonLabel = selectedEpisode.season?.let {
                                     stringResource(Res.string.episodes_season, it)
                                 } ?: stringResource(Res.string.episodes_specials),
                                 isEpisodeWatched = isSelectedEpisodeWatched,
+                                isEpisodeRewatched = isSelectedEpisodeRewatched,
+                                hasActiveRewatch = rewatchEpisodes.isNotEmpty(),
                                 canMarkPreviousEpisodes = previousEpisodes.isNotEmpty(),
                                 arePreviousEpisodesWatched = arePreviousEpisodesWatched,
                                 isSeasonWatched = isSeasonWatched,
@@ -1438,6 +1445,13 @@ fun MetaDetailsScreen(
                                         episode = selectedEpisode,
                                         isCurrentlyWatched = isSelectedEpisodeWatched,
                                     )
+                                },
+                                onMarkRewatched = {
+                                    WatchingActions.markEpisodeRewatched(meta, selectedEpisode) { marked ->
+                                        NuvioToastController.show(
+                                            if (marked) rewatchedToast else rewatchedErrorToast,
+                                        )
+                                    }
                                 },
                                 onTogglePreviousWatched = {
                                     WatchingActions.togglePreviousEpisodesWatched(

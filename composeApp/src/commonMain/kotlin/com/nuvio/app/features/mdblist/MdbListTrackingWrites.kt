@@ -42,8 +42,10 @@ class MdbListTrackingWrites(
         ) {
             return
         }
-        scrobble.scrobble(scope(profileId), action, event)
-        if (completesPlayback && event.playbackId != 0L) {
+        val written = scrobble.scrobble(scope(profileId), action, event)
+        // Latch only a completion the tracker accepted: a failed write must not suppress the stop
+        // that really ends the playback.
+        if (completesPlayback && written && event.playbackId != 0L) {
             lastCompletedPlaybackId = event.playbackId
         }
     }
