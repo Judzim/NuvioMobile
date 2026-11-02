@@ -266,6 +266,49 @@ class SimklRewatchRunsTest {
     }
 
     @Test
+    fun `a flat anime session is found for the removal of an anime episode`() {
+        val flatSession = SimklLibraryEntry(
+            mediaType = SimklMediaType.ANIME,
+            status = SimklListStatus.COMPLETED,
+            lastWatchedAt = OLD,
+            show = SimklMedia(title = "Frieren", ids = mapOf("mal" to jsonValue("52991"))),
+            seasons = listOf(
+                SimklSeason(
+                    number = null,
+                    episodes = listOf(SimklEpisode(number = 7, watchedAt = OLD)),
+                ),
+            ),
+            isRewatch = true,
+            rewatchId = 77L,
+            rewatchStatus = "active",
+        )
+        val anime = TrackingMediaReference(
+            kind = TrackingMediaKind.ANIME,
+            ids = TrackingExternalIds(mal = 52991),
+            episode = TrackingEpisode(season = 1, number = 20),
+        )
+
+        // The catalogue numbers this episode S1E20; Simkl lists the anime flat as episode 7.
+        assertEquals(
+            77L,
+            listOf(flatSession).activeRewatchSessionIdForRemoval(
+                media = anime,
+                seasonNumber = 1,
+                episodeNumber = 20,
+                animeEpisodeNumber = 7,
+            ),
+        )
+        // A show without a season must never fall back to an arbitrary season.
+        assertNull(
+            listOf(session(id = 41, status = "active")).activeRewatchSessionIdForRemoval(
+                media = episode().copy(episode = TrackingEpisode(number = 7)),
+                seasonNumber = null,
+                episodeNumber = 7,
+            ),
+        )
+    }
+
+    @Test
     fun `a session that is not running, not this item or not a session is never joined`() {
         val target = episode()
 

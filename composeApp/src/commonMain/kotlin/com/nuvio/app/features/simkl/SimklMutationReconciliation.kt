@@ -171,13 +171,21 @@ private fun SimklLibraryEntry.withoutRewatchedEpisode(
     season: Int?,
     number: Int,
 ): SimklLibraryEntry {
-    val targetSeason = season ?: 1
     val updatedSeasons = seasons.map { candidateSeason ->
         candidateSeason.copy(
             episodes = candidateSeason.episodes.filterNot { episode ->
-                val matchesCanonical = candidateSeason.number == targetSeason && episode.number == number
-                val matchesTvdb = episode.tvdb?.season == targetSeason &&
-                    episode.tvdb.episode == number
+                // A flat anime session has no season number, and Simkl may return it either as
+                // null or as season 1. Match both so a removal also updates the local snapshot.
+                val matchesCanonical = when (season) {
+                    null -> (candidateSeason.number == null || candidateSeason.number == 1) &&
+                        episode.number == number
+                    else -> candidateSeason.number == season && episode.number == number
+                }
+                val matchesTvdb = when (season) {
+                    null -> (episode.tvdb?.season == null || episode.tvdb?.season == 1) &&
+                        episode.tvdb?.episode == number
+                    else -> episode.tvdb?.season == season && episode.tvdb?.episode == number
+                }
                 matchesCanonical || matchesTvdb
             },
         )
@@ -196,13 +204,19 @@ private fun SimklLibraryEntry.withoutWatchedEpisode(
     season: Int?,
     number: Int,
 ): SimklLibraryEntry {
-    val targetSeason = season ?: 1
     val updatedSeasons = seasons.map { candidateSeason ->
         candidateSeason.copy(
             episodes = candidateSeason.episodes.map { episode ->
-                val matchesCanonical = candidateSeason.number == targetSeason && episode.number == number
-                val matchesTvdb = episode.tvdb?.season == targetSeason &&
-                    episode.tvdb.episode == number
+                val matchesCanonical = when (season) {
+                    null -> (candidateSeason.number == null || candidateSeason.number == 1) &&
+                        episode.number == number
+                    else -> candidateSeason.number == season && episode.number == number
+                }
+                val matchesTvdb = when (season) {
+                    null -> (episode.tvdb?.season == null || episode.tvdb?.season == 1) &&
+                        episode.tvdb?.episode == number
+                    else -> episode.tvdb?.season == season && episode.tvdb?.episode == number
+                }
                 if (matchesCanonical || matchesTvdb) episode.copy(watchedAt = null) else episode
             },
         )

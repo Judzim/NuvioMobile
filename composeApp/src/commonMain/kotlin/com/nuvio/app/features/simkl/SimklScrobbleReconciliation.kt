@@ -1,6 +1,7 @@
 package com.nuvio.app.features.simkl
 
 import com.nuvio.app.features.tracking.TrackingExternalIds
+import com.nuvio.app.features.tracking.TrackingMediaReference
 
 internal fun SimklSyncSnapshot.applyScrobbleResult(
     result: SimklScrobbleResult,
@@ -226,6 +227,29 @@ private fun SimklPlaybackEpisode.mergeMissing(
 private fun List<SimklLibraryEntry>.matchingEntry(
     result: SimklScrobbleResult,
 ): SimklLibraryEntry? = getOrNull(indexOfMatchingEntry(result))
+
+/**
+ * The history the question before a playback is asked against.
+ *
+ * The scrobble path reads this after a start answer, but a question has to know it before the
+ * player starts. The result is a read only view of the same matcher, so the pre-play gate and the
+ * start gate cannot disagree about whether a title was already watched.
+ */
+internal fun SimklSyncSnapshot.priorWatchForPlayback(media: TrackingMediaReference): SimklPriorWatch {
+    val episode = media.episode?.let { item ->
+        SimklPlaybackEpisode(season = item.season, number = item.number, title = item.title)
+    }
+    return priorWatchForScrobble(
+        SimklScrobbleResult(
+            outcome = SimklScrobbleOutcome.START,
+            playbackId = null,
+            progress = 0.0,
+            mediaType = media.kind.toSimklMediaType(),
+            media = media.toSimklMedia(),
+            episode = episode,
+        ),
+    )
+}
 
 /**
  * Reads the canonical history for the item a scrobble touched, so the caller can tell whether the

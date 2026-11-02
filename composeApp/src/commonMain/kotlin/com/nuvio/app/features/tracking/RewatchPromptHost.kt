@@ -20,7 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.rewatch_prompt_confirm
 import nuvio.composeapp.generated.resources.rewatch_prompt_dismiss
@@ -28,16 +27,15 @@ import nuvio.composeapp.generated.resources.rewatch_prompt_title
 import com.nuvio.app.features.simkl.SimklRewatchConsentRepository
 import org.jetbrains.compose.resources.stringResource
 
-/** How long the question stays on screen before it counts as a no. */
-private const val REWATCH_PROMPT_TIMEOUT_MS = 8_000L
-
 /**
  * Shows the rewatch question and its answer feedback above the rest of the app. It is deliberately
- * a popup instead of part of a screen: the playback that triggered it can end on any screen, and an
- * unanswered question must never block navigation or playback.
+ * a popup instead of part of a screen: the playback that triggered it can end on any screen, and a
+ * question that never reached the UI must not block it forever.
  *
  * The answer is what the scrobble at the end of the playback writes from: a yes may open a run, a
- * no keeps the series quiet, and nothing is sent before the playback ends.
+ * no keeps the series quiet, and nothing is sent before the playback ends. The question does not
+ * close itself: it leaves only when the user answers or backs out, because a timeout closing it
+ * would start the playback without a decision.
  */
 @Composable
 fun RewatchPromptHost() {
@@ -48,11 +46,9 @@ fun RewatchPromptHost() {
 private fun RewatchQuestionPopup() {
     val question by SimklRewatchConsentRepository.question.collectAsStateWithLifecycle()
     val active = question ?: return
-    val promptKey = active.media.stableKey
 
-    LaunchedEffect(promptKey) {
-        delay(REWATCH_PROMPT_TIMEOUT_MS)
-        SimklRewatchConsentRepository.dismiss()
+    LaunchedEffect(active) {
+        SimklRewatchConsentRepository.markQuestionShown()
     }
 
     Popup(

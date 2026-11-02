@@ -329,25 +329,32 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         if (!isActiveProfile(profileId)) return null
         SimklSyncRepository.ensureLoaded()
         val snapshot = SimklSyncRepository.state.value.snapshot
+        // The lookup needs the identity and the coordinates the user marked, while the request
+        // needs the anime-native reference: resolving first would drop the season the stored
+        // session was found with.
         val candidates = items.map { media ->
-            snapshot.enrichMediaReference(media).resolveAnimeEpisodeForSimkl()
+            val enriched = snapshot.enrichMediaReference(media)
+            enriched to enriched.resolveAnimeEpisodeForSimkl()
         }
-        val media = candidates.singleOrNull() ?: return null
+        val (media, resolved) = candidates.singleOrNull() ?: return null
         val episode = media.episode ?: return null
-        val season = episode.season ?: return null
-        val rewatchId = snapshot.rewatchSessions.activeRewatchSessionIdForEpisode(
+        val rewatchId = snapshot.rewatchSessions.activeRewatchSessionIdForRemoval(
             media = media,
-            seasonNumber = season,
+            seasonNumber = episode.season,
             episodeNumber = episode.number,
+            animeEpisodeNumber = resolved.episode?.number,
         ) ?: return null
-        val result = service.removeRewatchFromHistory(candidates, rewatchId)
+        val result = service.removeRewatchFromHistory(listOf(resolved), rewatchId)
         if (result.isComplete) {
             SimklSyncRepository.refreshRewatchRuns()
         }
         val contentId = media.catalog?.contentId?.takeIf(String::isNotBlank) ?: return result
         if (result.isComplete) {
+            val season = episode.season
             refreshRewatchSessions { sessions ->
-                !sessions.rewatchedEpisodesOf(contentId).contains(season to episode.number)
+                sessions.rewatchedEpisodesOf(contentId).none { key ->
+                    key.second == episode.number && (season == null || key.first == season)
+                }
             }
         }
         return result
@@ -383,6 +390,39 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             }
         }
         return closed
+    }
+
+    /**
+     * Raises the rewatch question while the source is still on screen, before the player opens.
+     *
+     * The start gate no longer asks; this is the one place the question is raised, so a playback
+     * that begins in the player cannot put a dialog over the video. The gate reads the same
+     * snapshot, mode and plan the start gate did, and takes the resume percentage the launch
+     * already knows: a playback that resumes above the completion bar has nothing to ask about.
+     */
+    override suspend fun preparePlayback(media: TrackingMediaReference, progressPercent: Double) {
+        if (!SimklAuthRepository.isAuthenticated.value) return
+        SimklSyncRepository.ensureLoaded()
+        TrackingSettingsRepository.ensureLoaded()
+        val snapshot = SimklSyncRepository.state.value.snapshot
+        val enriched = snapshot.enrichMediaReference(media)
+        val resolved = enriched.resolveAnimeEpisodeForSimkl()
+        if (snapshot.rewatchSessions.activeRewatchSessionId(resolved) != null) {
+            SimklRewatchConsentRepository.releaseGrant(resolved)
+            return
+        }
+        val askToStartRun = shouldAskToStartSimklRewatch(
+            mode = TrackingSettingsRepository.uiState.value.simklRewatchMode,
+            accountType = SimklAuthRepository.uiState.value.accountType,
+            action = TrackingScrobbleAction.START,
+            priorWatch = snapshot.priorWatchForPlayback(enriched),
+            nowEpochMs = SimklPlatformClock.nowEpochMs(),
+            hasRunningSession = false,
+            progressPercent = progressPercent,
+        )
+        if (askToStartRun) {
+            SimklRewatchConsentRepository.askAndAwait(resolved)
+        }
     }
 
     override suspend fun scrobble(
@@ -440,17 +480,6 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             recordRewatch = recordRewatch,
             completionThresholdPercent = completionThresholdPercent,
         )
-        // The prior watch has to be read before the commit, otherwise the playback looks like a
-        // repeat viewing of itself. A stop asks whether the viewing that ended is a rewatch, a start
-        // whether the viewing that is beginning opens a run.
-        val priorWatch = if (
-            action == TrackingScrobbleAction.STOP ||
-            action == TrackingScrobbleAction.START
-        ) {
-            snapshot.priorWatchForScrobble(result)
-        } else {
-            SimklPriorWatch.None
-        }
         if (action != TrackingScrobbleAction.START) {
             SimklSyncRepository.commitScrobble(result)
         }
@@ -464,26 +493,9 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         // Simkl named the plan the account is on, and it is not the one this client had cached: the
         // rewatch decision below is gated on that plan, so the cache is corrected where the answer is
         // instead of at the next read of the user settings. Only the plan is written.
-        val planAccountType = if (result.rewatchStatus == SimklRewatchStatus.PRO_REQUIRED) {
+        if (result.rewatchStatus == SimklRewatchStatus.PRO_REQUIRED) {
             log.i { "simkl rewatch plan no longer covers sessions; correcting the cached plan" }
             SimklAuthRepository.markPlanAsFree()
-            SIMKL_FREE_PLAN
-        } else {
-            accountType
-        }
-        if (action == TrackingScrobbleAction.START) {
-            val askToStartRun = shouldAskToStartSimklRewatch(
-                mode = mode,
-                accountType = planAccountType,
-                action = action,
-                priorWatch = priorWatch,
-                nowEpochMs = SimklPlatformClock.nowEpochMs(),
-                hasRunningSession = runningSessionId != null,
-                progressPercent = event.progressPercent,
-            )
-            if (askToStartRun) {
-                SimklRewatchConsentRepository.ask(media)
-            }
         }
         if (action == TrackingScrobbleAction.STOP) {
             // A dismissal is for the playback it happened during: the playback has ended, so the

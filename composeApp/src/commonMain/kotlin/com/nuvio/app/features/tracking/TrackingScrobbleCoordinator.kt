@@ -56,6 +56,28 @@ object TrackingScrobbleCoordinator {
         }
         return failures
     }
+
+    /**
+     * Gives the connected trackers a chance to prepare the user before the player starts.
+     *
+     * A tracker that fails here must not stop the playback, so each one is isolated. The call
+     * suspends until the tracker is done, which is what keeps the player closed while a question
+     * is still open.
+     */
+    suspend fun preparePlayback(media: TrackingMediaReference, progressPercent: Double = 0.0) {
+        TrackingProviderRegistry.ensureLoaded()
+        for (scrobbler in TrackingProviderRegistry.connectedScrobblers()) {
+            try {
+                scrobbler.preparePlayback(media, progressPercent)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                log.w(error) {
+                    "${scrobbler.providerId.storageId} preparePlayback failed"
+                }
+            }
+        }
+    }
 }
 
 internal suspend fun dispatchTrackingSeekScrobble(

@@ -144,6 +144,7 @@ import com.nuvio.app.features.player.ExternalPlayerPlatform
 import com.nuvio.app.features.player.PlayerLaunch
 import com.nuvio.app.features.player.PlayerLaunchStore
 import com.nuvio.app.features.player.PlayerSettingsRepository
+import com.nuvio.app.features.player.prepareTrackingPlayback
 import com.nuvio.app.features.player.SubtitleLanguageOption
 import com.nuvio.app.features.player.prepareExternalPlayerLaunch
 import com.nuvio.app.features.player.LockPlayerToLandscape
@@ -792,6 +793,9 @@ internal fun MainAppContent(
         }
 
         suspend fun openExternalPlayback(launch: PlayerLaunch): Boolean {
+            // The external player reports its start only after it has already closed, so the
+            // question has to be answered here, while the source is still on screen.
+            prepareTrackingPlayback(launch)
             lastExternalPlayerLaunch = launch
 
             val bingeGroup = launch.bingeGroup
@@ -882,8 +886,11 @@ internal fun MainAppContent(
                 coroutineScope.launch { openExternalPlayback(playerLaunch) }
                 return
             }
-            val launchId = PlayerLaunchStore.put(playerLaunch)
-            navController.navigate(PlayerRoute(launchId = launchId, title = playerLaunch.title))
+            coroutineScope.launch {
+                prepareTrackingPlayback(playerLaunch)
+                val launchId = PlayerLaunchStore.put(playerLaunch)
+                navController.navigate(PlayerRoute(launchId = launchId, title = playerLaunch.title))
+            }
         }
 
         fun openExternalStreamUrl(url: String): Boolean {
@@ -933,6 +940,7 @@ internal fun MainAppContent(
                         openExternalPlayback(playerLaunch)
                         true
                     } else {
+                        prepareTrackingPlayback(playerLaunch)
                         val launchId = PlayerLaunchStore.put(playerLaunch)
                         navController.navigate(PlayerRoute(launchId = launchId, title = playerLaunch.title))
                         true
@@ -1004,8 +1012,11 @@ internal fun MainAppContent(
                         coroutineScope.launch { openExternalPlayback(playerLaunch) }
                         return
                     }
-                    val launchId = PlayerLaunchStore.put(playerLaunch)
-                    navController.navigate(PlayerRoute(launchId = launchId, title = playerLaunch.title))
+                    coroutineScope.launch {
+                        prepareTrackingPlayback(playerLaunch)
+                        val launchId = PlayerLaunchStore.put(playerLaunch)
+                        navController.navigate(PlayerRoute(launchId = launchId, title = playerLaunch.title))
+                    }
                     return
                 }
             }
@@ -1281,12 +1292,17 @@ internal fun MainAppContent(
             }
             if (run != null) {
                 coroutineScope.launch {
+                    // The close continuation writes into the dismissals, which belong to the
+                    // profile that asked for the close. A switch while the write is in flight must
+                    // not let it touch the next profile.
+                    val closeProfileId = ProfileRepository.activeProfileId
                     val snapshot = SimklSyncRepository.state.value.snapshot
                     val media = snapshot.mediaReference(
                         contentId = run.contentId,
                         contentType = "series",
                     )
                     if (!SimklMutationRepository.closeRunningRewatchSession(media)) return@launch
+                    if (ProfileRepository.activeProfileId != closeProfileId) return@launch
                     // Closing the session removes the run everywhere, so a dismissal the row saved
                     // under one of the run's id forms must not keep hiding the series once it is back
                     // on its canonical card. Cleared only after the close landed.

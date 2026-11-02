@@ -162,6 +162,14 @@ interface TrackingScrobbler {
     )
 
     /**
+     * A chance to prepare the user before a playback starts.
+     *
+     * This writes nothing; it exists so a tracker can ask its own question before the player opens
+     * the item. The default keeps every other tracker out of the path.
+     */
+    suspend fun preparePlayback(media: TrackingMediaReference, progressPercent: Double = 0.0) = Unit
+
+    /**
      * Whether a scrobble of a playback no session owns is welcome here.
      *
      * Off by default. For Trakt a pause is a stop and a stop above the completion bar records a

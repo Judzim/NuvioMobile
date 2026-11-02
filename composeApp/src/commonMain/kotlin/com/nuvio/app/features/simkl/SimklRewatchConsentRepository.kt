@@ -4,6 +4,11 @@ import com.nuvio.app.features.tracking.TrackingMediaReference
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** An episode that is about to play, held while the user decides whether it opens a run. */
 data class RewatchQuestion(val media: TrackingMediaReference)
@@ -48,6 +53,17 @@ object SimklRewatchConsentRepository {
     val question: StateFlow<RewatchQuestion?> = _question.asStateFlow()
 
     /**
+     * True once the host drew the current question. The pre-play wait uses it to tell a question
+     * the user can see from one that never reached the UI.
+     */
+    private val _questionShown = MutableStateFlow(false)
+    val questionShown: StateFlow<Boolean> = _questionShown.asStateFlow()
+
+    fun markQuestionShown() {
+        _questionShown.value = true
+    }
+
+    /**
      * Raises the question for a playback that is about to start, unless the user has already said
      * something about this series: an answer of either kind stands for the whole app run, so the
      * same series is never asked about twice.
@@ -59,7 +75,40 @@ object SimklRewatchConsentRepository {
         }
         if (answered) return
         if (_question.value?.media?.seriesKey() == seriesKey) return
+        _questionShown.value = false
         _question.value = RewatchQuestion(media)
+    }
+
+    /**
+     * Raises the question and suspends the caller until it is answered.
+     *
+     * The player launch waits here, so the video must not start while the user is still deciding.
+     * The host answers through [grant], [decline] or [dismiss], and the question does not close
+     * itself: an unanswered one keeps the playback waiting. The timeout only covers a question that
+     * never reached the UI, so a broken host cannot block playback forever.
+     */
+    suspend fun askAndAwait(media: TrackingMediaReference, timeoutMs: Long = 10_000L) {
+        ask(media)
+        val seriesKey = media.seriesKey()
+        val open = _question.value
+        if (open == null || open.media.seriesKey() != seriesKey) return
+        val shown = withTimeoutOrNull(timeoutMs) {
+            merge(
+                questionShown.filter { it }.map { true },
+                question.filter { it == null || it.media.seriesKey() != seriesKey }.map { false },
+            ).first()
+        }
+        when (shown) {
+            true -> question.first { it == null || it.media.seriesKey() != seriesKey }
+            false -> Unit
+            null -> synchronized(lock) {
+                if (_question.value?.media?.seriesKey() == seriesKey) {
+                    _question.value = null
+                    _questionShown.value = false
+                    dismissedSeriesKeys += seriesKey
+                }
+            }
+        }
     }
 
     /** The user said yes: the series may be written into a run until the account has one. */
@@ -115,6 +164,7 @@ object SimklRewatchConsentRepository {
      */
     fun clear() {
         _question.value = null
+        _questionShown.value = false
         synchronized(lock) {
             grantedSeriesKeys.clear()
             declinedSeriesKeys.clear()
