@@ -34,13 +34,13 @@ class SimklSyncEngineTest {
     }
 
     @Test
-    fun `initial sync pulls each type sequentially before playback and activities`() = runBlocking {
+    fun `initial sync reads activities before the pulls`() = runBlocking {
         val remote = ScriptedRemote(
+            Step.Activities(activities(all = "v1")),
             Step.AllItems(SimklMediaType.SHOWS, responseOf(entry(SimklMediaType.SHOWS, "1"))),
             Step.AllItems(SimklMediaType.MOVIES, responseOf(entry(SimklMediaType.MOVIES, "2"))),
             Step.AllItems(SimklMediaType.ANIME, responseOf(entry(SimklMediaType.ANIME, "3"))),
             Step.Playback(listOf(playback("2"))),
-            Step.Activities(activities(all = "v1")),
         )
 
         val result = SimklSyncEngine(remote) { 500L }.synchronize(SimklSyncSnapshot())
@@ -249,6 +249,7 @@ class SimklSyncEngineTest {
     @Test
     fun `initial sync discards playback superseded by watched history`() = runBlocking {
         val remote = ScriptedRemote(
+            Step.Activities(activities(all = "v1", playback = "p1")),
             Step.AllItems(
                 SimklMediaType.SHOWS,
                 responseOf(watchedShowEntry("1", "2024-04-30T22:14:00Z")),
@@ -256,7 +257,6 @@ class SimklSyncEngineTest {
             Step.AllItems(SimklMediaType.MOVIES, SimklAllItemsResponse(movies = emptyList())),
             Step.AllItems(SimklMediaType.ANIME, SimklAllItemsResponse(anime = emptyList())),
             Step.Playback(listOf(episodePlayback("1", "2024-04-30T22:13:00Z"))),
-            Step.Activities(activities(all = "v1", playback = "p1")),
         )
 
         val result = SimklSyncEngine(remote) { 900L }.synchronize(SimklSyncSnapshot())
