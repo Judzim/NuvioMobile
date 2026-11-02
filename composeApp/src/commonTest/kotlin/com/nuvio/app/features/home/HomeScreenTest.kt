@@ -7,6 +7,7 @@ import com.nuvio.app.features.cloud.CloudLibraryProviderState
 import com.nuvio.app.features.cloud.CloudLibraryUiState
 import com.nuvio.app.features.cloud.playbackVideoId
 import com.nuvio.app.features.debrid.DebridProviders
+import com.nuvio.app.features.tracking.RewatchRunPosition
 import com.nuvio.app.features.watchprogress.CachedInProgressItem
 import com.nuvio.app.features.watchprogress.CachedNextUpItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
@@ -17,6 +18,7 @@ import com.nuvio.app.features.watchprogress.nextUpDismissKey
 import com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs
 import com.nuvio.app.features.watchprogress.resolvedProgressKey
 import com.nuvio.app.features.watchprogress.toContinueWatchingItem
+import com.nuvio.app.features.watchprogress.withoutLiveRewatchDismissals
 import com.nuvio.app.features.watched.WatchedItem
 import com.nuvio.app.features.watching.domain.WatchingContentRef
 import kotlinx.serialization.json.Json
@@ -925,6 +927,34 @@ class HomeScreenTest {
 
         assertFalse(hasUsableHomeNextUpMetadata(decision.item))
         assertEquals(HomeNextUpCandidateMetadataOutcome.Dismissed, decision.outcome)
+    }
+
+    @Test
+    fun `a live rewatch run overrides a saved dismissal of its title`() {
+        val dismissed = setOf(
+            nextUpDismissKey("show", 1, 1),
+            nextUpDismissKey("other", 2, 2),
+        )
+        val runs = listOf(
+            RewatchRunPosition(
+                contentId = "show",
+                seasonNumber = 1,
+                episodeNumber = 2,
+                markedAtEpochMs = 1_000L,
+            ),
+        )
+
+        assertEquals(
+            setOf(nextUpDismissKey("other", 2, 2)),
+            dismissed.withoutLiveRewatchDismissals(runs),
+        )
+    }
+
+    @Test
+    fun `no runs leave the saved dismissals alone`() {
+        val dismissed = setOf(nextUpDismissKey("show", 1, 1))
+
+        assertEquals(dismissed, dismissed.withoutLiveRewatchDismissals(emptyList()))
     }
 
     private fun progressEntry(

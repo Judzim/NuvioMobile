@@ -5,6 +5,7 @@ import com.nuvio.app.core.i18n.localizedEpisodeTitle
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.cloudLibraryProviderPosterUrl
 import com.nuvio.app.features.details.MetaVideo
+import com.nuvio.app.features.tracking.RewatchRunPosition
 import com.nuvio.app.features.tracking.TrackingAttributedItem
 import com.nuvio.app.features.tracking.WatchProgressSource
 import com.nuvio.app.features.watching.domain.WatchingContentRef
@@ -289,6 +290,23 @@ internal fun nextUpDismissKey(
     append(seasonNumber ?: -1)
     append("|")
     append(episodeNumber ?: -1)
+}
+
+/**
+ * The saved next up dismissals without the ones a running rewatch now overrides.
+ *
+ * A dismissal is kept per content id and coordinates, and closing a run used to save one. A new run
+ * of the same title opened on another device would then keep hiding the card even though the
+ * account reports the run as live. A run wins over every dismissal of its title; the other
+ * dismissals are left alone.
+ */
+internal fun Set<String>.withoutLiveRewatchDismissals(
+    runs: List<RewatchRunPosition>,
+): Set<String> {
+    if (isEmpty() || runs.isEmpty()) return this
+    return filterNotTo(mutableSetOf()) { key ->
+        runs.any { run -> run.matches(key.substringBefore('|')) }
+    }
 }
 
 internal fun WatchProgressEntry.toContinueWatchingItem(): ContinueWatchingItem {

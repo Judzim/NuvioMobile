@@ -91,6 +91,7 @@ import com.nuvio.app.features.watchprogress.buildContinueWatchingEpisodeSubtitle
 import com.nuvio.app.features.watchprogress.continueWatchingEntries
 import com.nuvio.app.features.watchprogress.toContinueWatchingItem
 import com.nuvio.app.features.watchprogress.toUpNextContinueWatchingItem
+import com.nuvio.app.features.watchprogress.withoutLiveRewatchDismissals
 import com.nuvio.app.core.ui.DisintegrationRequest
 import com.nuvio.app.core.poster.withCustomPosterUrls
 import com.nuvio.app.features.watching.application.WatchingState
@@ -173,6 +174,14 @@ fun HomeScreen(
         TrackingSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
     val simklRewatchRuns = SimklSyncRepository.state.collectAsStateWithLifecycle().value.snapshot.rewatchRuns
+    // A live run of a title outranks a dismissal saved under it: the account says the series is
+    // being rewatched now, so a close that left a key behind must not hide the new card.
+    val effectiveDismissedNextUpKeys = remember(
+        effectiveDismissedNextUpKeys,
+        simklRewatchRuns,
+    ) {
+        continueWatchingPreferences.dismissedNextUpKeys.withoutLiveRewatchDismissals(simklRewatchRuns)
+    }
     var observedOfflineState by remember { mutableStateOf(false) }
 
     ScreenActivityEffect(scrollToTopRequests) { active ->
@@ -390,7 +399,7 @@ fun HomeScreen(
     val cachedNextUpItems = remember(
         cachedNextUpReleases,
         cachedProjectionGeneration,
-        continueWatchingPreferences.dismissedNextUpKeys,
+        effectiveDismissedNextUpKeys,
         activeNextUpSeedContentIds,
         currentNextUpSeedByContentId,
         progressProviderOwnsCompletedHistory,
@@ -433,7 +442,7 @@ fun HomeScreen(
             ) {
                 return@mapNotNull null
             }
-            if (nextUpDismissKey(cached.contentId, cached.seedSeason, cached.seedEpisode) in continueWatchingPreferences.dismissedNextUpKeys) {
+            if (nextUpDismissKey(cached.contentId, cached.seedSeason, cached.seedEpisode) in effectiveDismissedNextUpKeys) {
                 return@mapNotNull null
             }
             val releaseEpochMs = cachedRelease.epochMs()
@@ -477,7 +486,7 @@ fun HomeScreen(
     val effectivNextUpItems = remember(
         nextUpItemsBySeries,
         cachedNextUpItems,
-        continueWatchingPreferences.dismissedNextUpKeys,
+        effectiveDismissedNextUpKeys,
         activeNextUpSeedContentIds,
         currentNextUpSeedByContentId,
         shouldValidateMissingNextUpSeeds,
@@ -493,7 +502,7 @@ fun HomeScreen(
                 item.parentMetaId,
                 item.nextUpSeedSeasonNumber,
                 item.nextUpSeedEpisodeNumber,
-            ) !in continueWatchingPreferences.dismissedNextUpKeys
+            ) !in effectiveDismissedNextUpKeys
         }
         mergeHomeNextUpItemsWithCache(
             resolvedItems = liveNextUpItems,
@@ -530,10 +539,10 @@ fun HomeScreen(
             items.withCustomPosterUrls(cwPosterPattern)
         }
     }
-    val shuffleCandidates = remember(completedSeriesCandidates, continueWatchingPreferences.dismissedNextUpKeys) {
+    val shuffleCandidates = remember(completedSeriesCandidates, effectiveDismissedNextUpKeys) {
         completedSeriesCandidates.filter { candidate ->
             nextUpDismissKey(candidate.content.id, candidate.seasonNumber, candidate.episodeNumber) !in
-                continueWatchingPreferences.dismissedNextUpKeys
+                effectiveDismissedNextUpKeys
         }
     }
     val rawShuffledContinueWatchingItems = rememberShuffleHomeItems(
@@ -617,7 +626,7 @@ fun HomeScreen(
         networkStatusUiState.condition,
         continueWatchingPreferences.showUnairedNextUp,
         continueWatchingPreferences.upNextFromFurthestEpisode,
-        continueWatchingPreferences.dismissedNextUpKeys,
+        effectiveDismissedNextUpKeys,
         cwCacheGeneration,
     ) {
         mutableStateOf(0)
@@ -638,7 +647,7 @@ fun HomeScreen(
         nextUpResolutionRetryAttempt,
         continueWatchingPreferences.showUnairedNextUp,
         continueWatchingPreferences.upNextFromFurthestEpisode,
-        continueWatchingPreferences.dismissedNextUpKeys,
+        effectiveDismissedNextUpKeys,
         watchProgressSeedKey,
         visibleContinueWatchingEntries,
         nextUpWatchedItems,
@@ -743,7 +752,7 @@ fun HomeScreen(
                                     todayIsoDate = todayIsoDate,
                                     preferFurthestEpisode = continueWatchingPreferences.upNextFromFurthestEpisode,
                                     showUnairedNextUp = continueWatchingPreferences.showUnairedNextUp,
-                                    dismissedNextUpKeys = continueWatchingPreferences.dismissedNextUpKeys,
+                                    dismissedNextUpKeys = effectiveDismissedNextUpKeys,
                                     providerOwnsCompletedHistory = progressProviderOwnsCompletedHistory,
                                     // Only the run the seed stage kept decides the card: a run an
                                     // older watch position outranks has already lost there, and the
