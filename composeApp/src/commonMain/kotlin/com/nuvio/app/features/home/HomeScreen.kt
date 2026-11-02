@@ -177,7 +177,7 @@ fun HomeScreen(
     // A live run of a title outranks a dismissal saved under it: the account says the series is
     // being rewatched now, so a close that left a key behind must not hide the new card.
     val effectiveDismissedNextUpKeys = remember(
-        effectiveDismissedNextUpKeys,
+        continueWatchingPreferences.dismissedNextUpKeys,
         simklRewatchRuns,
     ) {
         continueWatchingPreferences.dismissedNextUpKeys.withoutLiveRewatchDismissals(simklRewatchRuns)
