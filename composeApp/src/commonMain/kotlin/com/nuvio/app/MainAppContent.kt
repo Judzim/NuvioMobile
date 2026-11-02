@@ -1305,8 +1305,10 @@ internal fun MainAppContent(
                     if (ProfileRepository.activeProfileId != closeProfileId) return@launch
                     // Closing the session removes the run everywhere, so a dismissal the row saved
                     // under one of the run's id forms must not keep hiding the series once it is back
-                    // on its canonical card. Cleared only after the close landed.
-                    for (key in run.matchKeys) {
+                    // on its canonical card. The card's own id is included: a catalogue id the run
+                    // match keys do not carry would otherwise survive the close. Cleared only after
+                    // the close landed.
+                    for (key in (run.matchKeys + run.contentId + item.parentMetaId).distinct()) {
                         ContinueWatchingPreferencesRepository.removeDismissedNextUpKeysForContent(key)
                     }
                 }
