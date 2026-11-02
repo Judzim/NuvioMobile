@@ -1,5 +1,6 @@
 package com.nuvio.app.features.tracking
 
+import com.nuvio.app.features.servers.ServerItemRef
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 
 /**
@@ -23,6 +24,9 @@ internal suspend fun prepareTrackingPlayback(
     progressPercent: Double? = null,
 ) {
     val contentId = parentMetaId?.trim()?.takeIf(String::isNotEmpty) ?: return
+    // A server item has no tracker identity of its own: the player resolves the meta's id later,
+    // and a question keyed on the server id could never match the write it prepares for.
+    if (ServerItemRef.isServerId(contentId)) return
     val media = buildTrackingMediaReference(
         contentType = contentType?.trim()?.takeIf(String::isNotEmpty) ?: "movie",
         parentMetaId = contentId,
