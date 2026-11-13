@@ -1,6 +1,7 @@
 package com.nuvio.app.features.simkl
 
 import com.nuvio.app.features.tracking.TRACKING_COMPLETION_BAR_PERCENT
+import com.nuvio.app.features.tracking.TrackingMutationResult
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
 
@@ -207,6 +208,39 @@ internal fun shouldRecordSimklRewatchOnMark(
 ): Boolean = (explicitRewatch || isRepeatViewing) &&
     mode != SimklRewatchMode.OFF &&
     isSimklRewatchPlanEligible(accountType)
+
+/**
+ * Whether a history write actually booked an episode into a rewatch session.
+ *
+ * The status alone is not enough: an already running session can be named in the answer even when
+ * the episode was folded into the original watch inside the 2-day gap. The account reports that as
+ * zero added episodes, so the count is what says the write landed. A free plan and a first watch
+ * also add no session and report no rewatch status.
+ */
+internal fun simklHistoryRewatchWasRecorded(status: String?, addedCount: Int): Boolean =
+    addedCount > 0 && when (status?.trim()?.lowercase()) {
+        "active", "completed", "closed" -> true
+        else -> false
+    }
+
+/** What the detail screen tells the user after an explicit Mark as rewatched. */
+internal enum class RewatchMarkOutcome {
+    RECORDED,
+    TOO_SOON,
+    NOT_RECORDED,
+    FAILED,
+}
+
+internal fun simklRewatchMarkOutcome(result: TrackingMutationResult): RewatchMarkOutcome {
+    val status = result.resolutions
+        .firstOrNull { resolution -> resolution.rewatchStatus != null }
+        ?.rewatchStatus
+    return when {
+        simklHistoryRewatchWasRecorded(status, result.addedCount) -> RewatchMarkOutcome.RECORDED
+        status?.trim()?.equals("too_soon", ignoreCase = true) == true -> RewatchMarkOutcome.TOO_SOON
+        else -> RewatchMarkOutcome.NOT_RECORDED
+    }
+}
 
 /**
  * Whether the user should be asked to record the playback Simkl just accepted as a repeat viewing.

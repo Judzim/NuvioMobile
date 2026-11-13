@@ -105,6 +105,13 @@ data class TrackingMutationResult(
     val attemptedCount: Int,
     val notFoundCount: Int = 0,
     val resolutions: List<TrackingMutationResolution> = emptyList(),
+    /**
+     * How many items the provider reports as actually added by the write.
+     *
+     * Simkl reports zero for a repeat it folded into an existing watch, even when the answer still
+     * names the session it rejected. Providers without a count leave it at zero.
+     */
+    val addedCount: Int = 0,
 ) {
     val resolvedListStatuses: List<TrackingListStatus>
         get() = resolutions.mapNotNull(TrackingMutationResolution::listStatus)

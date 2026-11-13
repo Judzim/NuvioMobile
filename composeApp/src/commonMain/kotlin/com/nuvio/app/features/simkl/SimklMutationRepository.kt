@@ -325,7 +325,20 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             ?: target?.catalog?.contentId?.takeIf(String::isNotBlank)
         val targetSeason = target?.episode?.season
         val targetEpisode = target?.episode?.number
-        if (result.isComplete && target != null && targetContentId != null && targetEpisode != null) {
+        // Only an episode the account actually added, in a state it uses for a running or finished
+        // session, means a run exists to read back. A no-op inside the 2-day gap can still echo the
+        // active session, so the added count is what tells the two apart.
+        val rewatchStatuses = result.resolutions.mapNotNull { resolution -> resolution.rewatchStatus }
+        val rewatchRecorded = rewatchStatuses.any { status ->
+            simklHistoryRewatchWasRecorded(status, result.addedCount)
+        }
+        if (
+            result.isComplete &&
+            rewatchRecorded &&
+            target != null &&
+            targetContentId != null &&
+            targetEpisode != null
+        ) {
             val readContentId = targetContentId
             val readEpisode = targetEpisode
             val readKind = target.kind

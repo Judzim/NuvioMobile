@@ -369,6 +369,34 @@ class SimklMutationReconciliationTest {
         assertFalse(receipt.requiresReconciliation)
     }
 
+    @Test
+    fun `a history receipt carries the added episode count`() {
+        val receipt = response(
+            """
+            {
+              "added": {
+                "movies": 0,
+                "shows": 0,
+                "episodes": 1,
+                "statuses": [
+                  {
+                    "request": {"ids": {"simkl": 1}, "type": "show"},
+                    "response": {"rewatch_status": "active"}
+                  }
+                ]
+              },
+              "not_found": {"movies": [], "shows": [], "episodes": []}
+            }
+            """,
+        ).toHistoryMutationReceipt(
+            listOf(TrackingHistoryItem(show(TrackingEpisode(season = 1, number = 1)))),
+            json,
+        )
+
+        assertEquals(1, receipt.result.addedCount)
+        assertEquals("active", receipt.result.resolutions.single().rewatchStatus)
+    }
+
     private fun movieHistoryReceipt(posterUrl: String): SimklMutationReceipt = response(
         """
         {

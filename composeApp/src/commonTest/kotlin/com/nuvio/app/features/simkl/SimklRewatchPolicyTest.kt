@@ -1,5 +1,7 @@
 package com.nuvio.app.features.simkl
 
+import com.nuvio.app.features.tracking.TrackingMutationResolution
+import com.nuvio.app.features.tracking.TrackingMutationResult
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -261,6 +263,28 @@ class SimklRewatchPolicyTest {
         assertFalse(isSimklRewatchModeSelectable(SimklRewatchMode.AUTOMATIC, null))
         assertTrue(isSimklRewatchModeSelectable(SimklRewatchMode.SEMI_AUTOMATIC, "pro"))
         assertTrue(isSimklRewatchModeSelectable(SimklRewatchMode.AUTOMATIC, "vip"))
+    }
+
+    @Test
+    fun `a history rewatch needs an added episode, not only a status`() {
+        assertTrue(simklHistoryRewatchWasRecorded("active", addedCount = 1))
+        assertTrue(simklHistoryRewatchWasRecorded("completed", addedCount = 2))
+        assertFalse(simklHistoryRewatchWasRecorded("active", addedCount = 0))
+        assertFalse(simklHistoryRewatchWasRecorded(null, addedCount = 1))
+        assertFalse(simklHistoryRewatchWasRecorded("too_soon", addedCount = 0))
+    }
+
+    @Test
+    fun `an explicit mark reports a refusal apart from a recorded rewatch`() {
+        fun result(status: String?, added: Int) = TrackingMutationResult(
+            attemptedCount = 1,
+            resolutions = listOf(TrackingMutationResolution(rewatchStatus = status)),
+            addedCount = added,
+        )
+
+        assertEquals(RewatchMarkOutcome.RECORDED, simklRewatchMarkOutcome(result("active", 1)))
+        assertEquals(RewatchMarkOutcome.TOO_SOON, simklRewatchMarkOutcome(result("too_soon", 0)))
+        assertEquals(RewatchMarkOutcome.NOT_RECORDED, simklRewatchMarkOutcome(result("active", 0)))
     }
 
     @Test

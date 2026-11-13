@@ -1193,6 +1193,8 @@
     <string name="episode_mark_not_rewatched">Zrušiť opakované pozretie</string>
     <string name="episode_mark_rewatched_done">Označené ako opakované pozretie</string>
     <string name="episode_mark_rewatched_failed">Nepodarilo sa označiť ako opakované pozretie</string>
+    <string name="episode_mark_rewatched_too_soon">Príliš skoro na opakované pozretie tejto epizódy. Skúste to znova po 2 dňoch.</string>
+    <string name="episode_mark_rewatched_not_recorded">Simkl toto opakované pozretie nezaznamenal.</string>
     <string name="episode_mark_not_rewatched_done">Opakované pozretie zrušené</string>
     <string name="episode_mark_not_rewatched_failed">Nepodarilo sa zrušiť opakované pozretie</string>
     <string name="home_continue_watching_up_next">Ďalšia epizóda</string>

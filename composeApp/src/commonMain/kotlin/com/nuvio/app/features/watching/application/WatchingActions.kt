@@ -4,7 +4,9 @@ import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.simkl.RewatchMarkOutcome
 import com.nuvio.app.features.simkl.SimklMutationRepository
+import com.nuvio.app.features.simkl.simklRewatchMarkOutcome
 import com.nuvio.app.features.tracking.TrackingHistoryItem
 import com.nuvio.app.features.tracking.buildTrackingMediaReference
 import com.nuvio.app.features.profiles.ProfileRepository
@@ -128,7 +130,7 @@ object WatchingActions {
     fun markEpisodeRewatched(
         meta: MetaDetails,
         episode: MetaVideo,
-        onResult: (Boolean) -> Unit = {},
+        onResult: (RewatchMarkOutcome) -> Unit = {},
     ) {
         val season = episode.season ?: return
         val number = episode.episode ?: return
@@ -149,7 +151,7 @@ object WatchingActions {
                     items = listOf(TrackingHistoryItem(media = media, isRewatch = true)),
                 )
             }.getOrNull()
-            onResult(result?.isComplete == true)
+            onResult(result?.let(::simklRewatchMarkOutcome) ?: RewatchMarkOutcome.FAILED)
         }
     }
 

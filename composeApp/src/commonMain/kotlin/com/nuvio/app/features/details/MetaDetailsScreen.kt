@@ -150,6 +150,7 @@ import com.nuvio.app.features.trakt.TraktCommentReview
 import com.nuvio.app.features.trakt.TraktCommentsRepository
 import com.nuvio.app.features.trakt.TraktCommentsSettings
 import com.nuvio.app.features.trakt.TraktConnectionMode
+import com.nuvio.app.features.simkl.RewatchMarkOutcome
 import com.nuvio.app.features.simkl.SimklSyncRepository
 import com.nuvio.app.features.simkl.rewatchedEpisodesOf
 import com.nuvio.app.features.tracking.TrackingLibraryTab
@@ -1456,6 +1457,8 @@ fun MetaDetailsScreen(
                             }
                             val rewatchedToast = stringResource(Res.string.episode_mark_rewatched_done)
                             val rewatchedErrorToast = stringResource(Res.string.episode_mark_rewatched_failed)
+                            val rewatchedTooSoonToast = stringResource(Res.string.episode_mark_rewatched_too_soon)
+                            val rewatchedNotRecordedToast = stringResource(Res.string.episode_mark_rewatched_not_recorded)
                             val rewatchRemovedToast = stringResource(Res.string.episode_mark_not_rewatched_done)
                             val rewatchRemoveErrorToast = stringResource(Res.string.episode_mark_not_rewatched_failed)
                             val isSelectedEpisodeRewatched = selectedEpisode.season?.let { season ->
@@ -1481,9 +1484,14 @@ fun MetaDetailsScreen(
                                     )
                                 },
                                 onMarkRewatched = {
-                                    WatchingActions.markEpisodeRewatched(meta, selectedEpisode) { marked ->
+                                    WatchingActions.markEpisodeRewatched(meta, selectedEpisode) { outcome ->
                                         NuvioToastController.show(
-                                            if (marked) rewatchedToast else rewatchedErrorToast,
+                                            when (outcome) {
+                                                RewatchMarkOutcome.RECORDED -> rewatchedToast
+                                                RewatchMarkOutcome.TOO_SOON -> rewatchedTooSoonToast
+                                                RewatchMarkOutcome.NOT_RECORDED -> rewatchedNotRecordedToast
+                                                RewatchMarkOutcome.FAILED -> rewatchedErrorToast
+                                            },
                                         )
                                     }
                                 },
