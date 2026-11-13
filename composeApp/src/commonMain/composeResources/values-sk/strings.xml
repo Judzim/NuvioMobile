@@ -514,6 +514,7 @@
     <string name="downloads_status_failed">Zlyhalo</string>
     <string name="downloads_status_paused">Pozastavené • %1$s</string>
     <string name="episodes_cd_watched">Videné</string>
+    <string name="episodes_cd_rewatched">Opakované pozretie</string>
     <string name="episodes_season">Séria %1$d</string>
     <string name="episodes_specials">Špeciály</string>
     <string name="floating_prompt_continue_where_left_off">Pokračovať tam, kde ste skončili</string>

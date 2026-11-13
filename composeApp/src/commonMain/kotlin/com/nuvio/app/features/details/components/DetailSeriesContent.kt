@@ -66,6 +66,7 @@ import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
 import com.nuvio.app.core.ui.NuvioAnimatedWatchedBadge
 import com.nuvio.app.core.ui.NuvioCardDepthSurface
+import com.nuvio.app.core.ui.NuvioRewatchBadge
 import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.backdropControlColor
 import com.nuvio.app.core.ui.nuvioCardDepth
@@ -784,16 +785,6 @@ private fun EpisodeHorizontalRow(
     }
 }
 
-/**
- * How solid the watched marker is on an episode a rewatch in progress has not reached yet.
- *
- * A value rather than a number in the drawing code, so the look can be tuned without touching the
- * layout: the marker is the same one the app has always drawn, only faded while a run owns the
- * meaning of a full one. The fade has to be deep enough to read as "not this run's yet" next to a
- * solid marker.
- */
-private const val REWATCH_PENDING_MARKER_ALPHA = 0.35f
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EpisodeHorizontalCard(
@@ -871,24 +862,23 @@ private fun EpisodeHorizontalCard(
                 ),
         )
 
-        // A run in progress is what gives the marker two meanings: solid marks an episode the run
-        // has already rewatched, and faded marks one the account watched before the run has not
-        // reached yet. Without a run every watched episode keeps the solid marker it always had.
+        // The check marks any watched episode. The R beside it is the rewatch marker and only appears
+        // when the running session has covered this exact episode.
         val isMarkedRewatched = remember(video.season, video.episode, rewatchedEpisodes) {
             video.seasonEpisodeKey()?.let { key -> key in rewatchedEpisodes } ?: false
         }
-        val rewatchMarkerAlpha = if (rewatchedEpisodes.isNotEmpty() && isWatched && !isMarkedRewatched) {
-            REWATCH_PENDING_MARKER_ALPHA
-        } else {
-            1f
-        }
-        NuvioAnimatedWatchedBadge(
-            isVisible = isWatched,
-            alpha = rewatchMarkerAlpha,
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(metrics.contentPadding),
-        )
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isWatched && isMarkedRewatched) {
+                NuvioRewatchBadge()
+            }
+            NuvioAnimatedWatchedBadge(isVisible = isWatched)
+        }
 
         EpisodeAvailabilityBadge(
             video = video,
@@ -1281,24 +1271,23 @@ private fun EpisodeListCard(
                         .padding(start = 8.dp, top = 8.dp),
                 )
 
-                // A run in progress is what gives the marker two meanings: solid marks an episode
-                // the run has already rewatched, and faded marks one the account watched before the
-                // run has not reached yet. Without a run every watched episode keeps the solid marker.
+                // The check marks any watched episode. The R beside it is the rewatch marker and
+                // only appears when the running session has covered this exact episode.
                 val isMarkedRewatched = remember(video.season, video.episode, rewatchedEpisodes) {
                     video.seasonEpisodeKey()?.let { key -> key in rewatchedEpisodes } ?: false
                 }
-                val rewatchMarkerAlpha = if (rewatchedEpisodes.isNotEmpty() && isWatched && !isMarkedRewatched) {
-                    REWATCH_PENDING_MARKER_ALPHA
-                } else {
-                    1f
-                }
-                NuvioAnimatedWatchedBadge(
-                    isVisible = isWatched,
-                    alpha = rewatchMarkerAlpha,
+                Row(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp),
-                )
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (isWatched && isMarkedRewatched) {
+                        NuvioRewatchBadge()
+                    }
+                    NuvioAnimatedWatchedBadge(isVisible = isWatched)
+                }
 
                 EpisodeAvailabilityBadge(
                     video = video,

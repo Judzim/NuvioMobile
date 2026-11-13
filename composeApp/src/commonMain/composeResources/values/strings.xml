@@ -645,6 +645,7 @@
     <string name="downloads_status_failed">Failed</string>
     <string name="downloads_status_paused">Paused • %1$s</string>
     <string name="episodes_cd_watched">Watched</string>
+    <string name="episodes_cd_rewatched">Rewatched</string>
     <string name="episodes_unavailable">Unavailable</string>
     <string name="episodes_season">Season %1$d</string>
     <string name="episodes_specials">Specials</string>
