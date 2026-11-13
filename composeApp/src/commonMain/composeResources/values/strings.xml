@@ -1400,7 +1400,7 @@
     <string name="settings_tracking_rewatch_automatic_description">Automatically start and log a rewatch when replaying any title finished more than 2 days ago.</string>
     <string name="settings_tracking_completion_title">Watched threshold</string>
     <string name="settings_tracking_completion_subtitle">Playback percentage required to mark a title as watched. End-credits markers take priority when available.</string>
-    <string name="settings_tracking_completion_value">%1$s%</string>
+    <string name="settings_tracking_completion_value">%1$s%%</string>
     <string name="settings_tracking_rewatch_pro_title">Rewatch tracking requires Simkl Pro</string>
     <string name="settings_tracking_rewatch_pro_description">Simkl records rewatches only for Pro or VIP accounts. Sessions already on your Simkl account stay there if your plan changes.</string>
     <string name="settings_tracking_rewatch_pro_upgrade">Upgrade</string>

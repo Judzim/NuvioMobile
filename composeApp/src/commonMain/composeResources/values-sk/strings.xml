@@ -2116,7 +2116,7 @@
     <string name="settings_tracking_rewatch_automatic_description">Automaticky začať a zaznamenať opakované pozretie pri prehratí akéhokoľvek titulu dokončeného pred viac ako 2 dňami.</string>
     <string name="settings_tracking_completion_title">Hranica pozretia</string>
     <string name="settings_tracking_completion_subtitle">Podiel, pri ktorom sa prehratie titulu považuje za dokončené a označí sa ako pozreté. Záloha, keď neexistuje časová pečiatka outro.</string>
-    <string name="settings_tracking_completion_value">%1$s %</string>
+    <string name="settings_tracking_completion_value">%1$s %%</string>
     <string name="settings_tracking_rewatch_pro_title">Zaznamenávanie opakovaných pozretí vyžaduje Simkl Pro</string>
     <string name="settings_tracking_rewatch_pro_description">Simkl zaznamenáva opakované pozretia len pre účty Pro alebo VIP. Relácie, ktoré už na účte Simkl máte, tam ostanú aj po zmene plánu.</string>
     <string name="settings_tracking_rewatch_pro_upgrade">Prejsť na Pro</string>
