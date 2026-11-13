@@ -45,6 +45,7 @@ import com.nuvio.app.features.streams.shouldShowAutoPlayLoading
 import com.nuvio.app.features.streams.shouldUseLandscapeAutoPlayLoading
 import com.nuvio.app.features.streams.StreamsUiState
 import com.nuvio.app.features.streams.YouTubeStreamResolver
+import com.nuvio.app.features.tracking.prepareTrackingPlayback as prepareTrackingQuestion
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.navigation.*
 import kotlinx.coroutines.CancellationException
@@ -87,6 +88,21 @@ internal fun StreamDestination(
             onBack()
         }
         return
+    }
+    // Asked as soon as the stream screen opens, before any stream resolves, so the question is on
+    // screen while the streams load instead of after the player already has a link. The playback
+    // paths below still wait for the answer before they open a player.
+    LaunchedEffect(route.launchId) {
+        prepareTrackingQuestion(
+            contentType = launch.type,
+            parentMetaId = launch.parentMetaId ?: launch.videoId,
+            videoId = launch.videoId,
+            seasonNumber = launch.seasonNumber,
+            episodeNumber = launch.episodeNumber,
+            title = launch.title,
+            episodeTitle = launch.episodeTitle,
+            progressPercent = launch.resumeProgressFraction?.let { it * 100.0 },
+        )
     }
     val pauseDescription = launch.pauseDescription
     val streamRouteScope = rememberCoroutineScope()
