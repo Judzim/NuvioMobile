@@ -46,6 +46,7 @@ suspend fun prepareExternalPlayerLaunch(
     sendSkipSegments: Boolean,
     preferredLanguage: String,
     secondaryLanguage: String?,
+    subtitleExtras: SubtitleRequestExtras? = null,
     onOverlayMessage: (String?) -> Unit,
 ): ExternalPlayerPlaybackRequest = coroutineScope {
     var result = request.copy(skipSegmentsJson = null)
@@ -69,6 +70,7 @@ suspend fun prepareExternalPlayerLaunch(
                     videoId = videoId,
                     preferredLanguage = preferredLanguage,
                     secondaryLanguage = secondaryLanguage,
+                    extras = subtitleExtras,
                 )
             }
 

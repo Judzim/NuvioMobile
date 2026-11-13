@@ -62,4 +62,7 @@ object TrackingSettingsRepository {
     /** Where a Simkl playback counts as finished, in percent. */
     fun setSimklWatchedThresholdPercent(percent: Int) =
         TraktSettingsRepository.setSimklWatchedThresholdPercent(percent)
+
+    fun setRatingSource(source: TrackingProviderId?) =
+        TraktSettingsRepository.setRatingSource(source)
 }

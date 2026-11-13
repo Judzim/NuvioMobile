@@ -7,9 +7,10 @@ import com.nuvio.app.features.profiles.ProfileRepository
 import com.nuvio.app.features.simkl.DEFAULT_SIMKL_ANIME_ID_PREFERENCE
 import com.nuvio.app.features.simkl.SimklAnimeIdPreference
 import com.nuvio.app.features.simkl.SIMKL_WATCHED_THRESHOLD_DEFAULT_PERCENT
+import com.nuvio.app.features.simkl.SimklRewatchConsentRepository
 import com.nuvio.app.features.simkl.SimklRewatchMode
 import com.nuvio.app.features.simkl.coerceSimklWatchedThresholdPercent
-import com.nuvio.app.features.simkl.SimklRewatchConsentRepository
+import com.nuvio.app.features.tracking.TrackingProviderId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,9 +65,9 @@ data class TraktSettingsUiState(
     val moreLikeThisSource: MoreLikeThisSourcePreference = DEFAULT_MORE_LIKE_THIS_SOURCE,
     val simklAnimeIdPreference: SimklAnimeIdPreference = DEFAULT_SIMKL_ANIME_ID_PREFERENCE,
     val simklRewatchMode: SimklRewatchMode = SimklRewatchMode.Default,
-    /** How much of a rewatch has to be on the account before it is offered as next up. */
     /** Where a Simkl playback counts as finished, in percent. */
     val simklWatchedThresholdPercent: Int = SIMKL_WATCHED_THRESHOLD_DEFAULT_PERCENT,
+    val ratingSource: TrackingProviderId? = null,
 )
 
 @Serializable
@@ -78,6 +79,7 @@ private data class StoredTraktSettings(
     val simklAnimeIdPreference: String? = null,
     val simklRewatchMode: String? = null,
     val simklWatchedThresholdPercent: Int? = null,
+    val ratingSource: String? = null,
 )
 
 object TraktSettingsRepository {
@@ -172,6 +174,12 @@ object TraktSettingsRepository {
         }
     }
 
+    fun setRatingSource(source: TrackingProviderId?) {
+        ensureLoaded()
+        if (_uiState.value.ratingSource == source) return
+        _uiState.value = _uiState.value.copy(ratingSource = source)
+        persist()
+    }
     private fun loadFromDisk() {
         hasLoaded = true
 
@@ -196,6 +204,7 @@ object TraktSettingsRepository {
                 simklWatchedThresholdPercent = coerceSimklWatchedThresholdPercent(
                     stored.simklWatchedThresholdPercent ?: SIMKL_WATCHED_THRESHOLD_DEFAULT_PERCENT,
                 ),
+                ratingSource = TrackingProviderId.fromStorage(stored.ratingSource),
             )
         } else {
             TraktSettingsUiState()
@@ -213,6 +222,7 @@ object TraktSettingsRepository {
                     simklAnimeIdPreference = state.simklAnimeIdPreference.name,
                     simklRewatchMode = state.simklRewatchMode.name,
                     simklWatchedThresholdPercent = state.simklWatchedThresholdPercent,
+                    ratingSource = state.ratingSource?.storageId,
                 ),
             ),
         )

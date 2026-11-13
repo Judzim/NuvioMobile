@@ -15,15 +15,17 @@ class MdbListTrackingWrites(
     private val sync: MdbListSyncRepository,
     private val history: MdbListHistoryService,
     private val scrobble: MdbListScrobbleService,
+    private val episodeMappings: MdbListEpisodeMappingService,
 ) : TrackingHistoryWriter, TrackingScrobbler {
     override val providerId = TrackingProviderId.MDBLIST
     override val seekScrobblePolicy = TrackingSeekScrobblePolicy.STOP_AND_RESTART
 
+    // MDBList reads episode numbers in TMDB's numbering, which can differ from the addon's.
     override suspend fun addToHistory(profileId: Int, items: Collection<TrackingHistoryItem>) =
-        history.add(scope(profileId), items)
+        scope(profileId).let { scope -> history.add(scope, items.map { it.copy(media = it.media.inMdbListNumbering()) }) }
 
     override suspend fun removeFromHistory(profileId: Int, items: Collection<TrackingMediaReference>) =
-        history.remove(scope(profileId), items)
+        scope(profileId).let { scope -> history.remove(scope, items.map { it.inMdbListNumbering() }) }
 
     /*
      * MDBList records a watch on a stop at or above the bar. One playback can report more than one
@@ -42,13 +44,20 @@ class MdbListTrackingWrites(
         ) {
             return
         }
-        val written = scrobble.scrobble(scope(profileId), action, event)
+        val written = scrobble.scrobble(
+            scope(profileId),
+            action,
+            event.copy(media = event.media.inMdbListNumbering()),
+        )
         // Latch only a completion the tracker accepted: a failed write must not suppress the stop
         // that really ends the playback.
         if (completesPlayback && written && event.playbackId != 0L) {
             lastCompletedPlaybackId = event.playbackId
         }
     }
+
+    private suspend fun TrackingMediaReference.inMdbListNumbering() =
+        episodeMappings.toMdbListNumbering(this, sync.currentProjection())
 
     private fun scope(profileId: Int): MdbListAuthScope = sync.currentScope().also {
         if (it.profileId != profileId) throw CancellationException("MDBList profile changed")
