@@ -342,13 +342,25 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             val readContentId = targetContentId
             val readEpisode = targetEpisode
             val readKind = target.kind
+            val pinnedRewatchId = targetItem.rewatchId
+            val writtenFlat = readKind == TrackingMediaKind.ANIME && targetSeason == null
             refreshRewatchSessions { sessions ->
-                sessions.rewatchSessionHolds(
-                    contentId = readContentId,
-                    kind = readKind,
-                    season = targetSeason,
-                    episode = readEpisode,
-                )
+                val holds = if (writtenFlat) {
+                    // A flat write opens or extends the session of the item its ids name, which the
+                    // series id does not find when the reference took only that item's anime id.
+                    sessions.flatAnimeWriteHolds(target, readEpisode)
+                } else {
+                    sessions.rewatchSessionHolds(
+                        contentId = readContentId,
+                        kind = readKind,
+                        season = targetSeason,
+                        episode = readEpisode,
+                    )
+                }
+                holds ||
+                    // A mark of the last episode the session lacked completes it, and a completed
+                    // session never holds the episode as a running one.
+                    (pinnedRewatchId != null && sessions.rewatchSessionEnded(pinnedRewatchId))
             }
         }
         return result
@@ -573,33 +585,25 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
      */
     private fun refreshRewatchSessions(settled: (List<SimklLibraryEntry>) -> Boolean) {
         scope.launch {
-            // The read is paired with the sync watermark, so it carries the items changed since
-            // the last sync, the write this waits for among them once Simkl publishes it. Every
-            // pass of the loop reads the same window on purpose: a narrower one would skip a
-            // change that was published between two reads.
-            val dateFrom = SimklSyncRepository.state.value.snapshot.watermark
-            var lastRead: List<SimklLibraryEntry>? = null
-            var settledSeen = false
-            for (waitMs in SIMKL_REWATCH_SESSION_READ_DELAYS_MS) {
-                delay(waitMs)
-                val sessions = runCatching { remote.fetchRewatchSessions(dateFrom) }
-                    .onFailure { error ->
-                        log.w { "Could not read the rewatch sessions back: ${error.message}" }
-                    }
-                    .getOrNull() ?: continue
-                lastRead = sessions
-                if (settled(sessions)) {
-                    settledSeen = true
-                    break
-                }
-            }
+            val result = readRewatchSessionsUntilSettled(
+                dateFrom = SimklSyncRepository.state.value.snapshot.watermark,
+                delays = SIMKL_REWATCH_SESSION_READ_DELAYS_MS,
+                read = { window ->
+                    runCatching { remote.fetchRewatchSessions(window) }
+                        .onFailure { error ->
+                            log.w { "Could not read the rewatch sessions back: ${error.message}" }
+                        }
+                        .getOrNull()
+                },
+                settled = settled,
+            )
             // A write the account took but did not act on looks exactly like one it never saw, and
             // only the reads tell the two apart. The line is what a report of a card that came back
             // is diagnosed from.
-            if (!settledSeen && lastRead != null) {
+            if (!result.settled && result.sessions != null) {
                 log.w { "The account did not report the session change the write asked for" }
             }
-            lastRead?.let { sessions -> SimklSyncRepository.adoptRewatchSessions(sessions) }
+            result.sessions?.let { sessions -> SimklSyncRepository.adoptRewatchSessions(sessions) }
         }
     }
 
@@ -626,6 +630,42 @@ internal fun simklHistoryWrites(items: List<TrackingHistoryItem>): List<Tracking
             group.map { item -> item.copy(isRewatch = false, rewatchId = null) }
         }
     }
+
+internal data class RewatchSessionReadResult(
+    val sessions: List<SimklLibraryEntry>?,
+    val settled: Boolean,
+)
+
+/**
+ * Reads the rewatch sessions back until [settled] accepts them.
+ *
+ * The delta read is paired with the sync watermark, so it carries the items whose activity moved,
+ * and it is what every wait reads: it costs one small response. A rewatch session can change without
+ * moving that activity, so when no delta settled, one whole read is made at the end before giving
+ * up. A whole read downloads the show and anime library with its episode dates, and reading it after
+ * every unsettled delta cost up to three of them per mark. The last read is returned either way.
+ */
+internal suspend fun readRewatchSessionsUntilSettled(
+    dateFrom: String?,
+    delays: LongArray,
+    read: suspend (String?) -> List<SimklLibraryEntry>?,
+    settled: (List<SimklLibraryEntry>) -> Boolean,
+): RewatchSessionReadResult {
+    var lastRead: List<SimklLibraryEntry>? = null
+    for (waitMs in delays) {
+        delay(waitMs)
+        val sessions = read(dateFrom) ?: continue
+        lastRead = sessions
+        if (settled(sessions)) return RewatchSessionReadResult(sessions = sessions, settled = true)
+    }
+    if (dateFrom != null) {
+        read(null)?.let { whole ->
+            lastRead = whole
+            if (settled(whole)) return RewatchSessionReadResult(sessions = whole, settled = true)
+        }
+    }
+    return RewatchSessionReadResult(sessions = lastRead, settled = false)
+}
 
 internal fun buildSimklListMutationBody(
     items: Collection<TrackingMediaReference>,

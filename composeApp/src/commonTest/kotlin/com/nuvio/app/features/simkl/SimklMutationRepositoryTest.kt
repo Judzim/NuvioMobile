@@ -410,6 +410,53 @@ class SimklMutationRepositoryTest {
     }
 
     @Test
+    fun `a delta read that misses the write gets one whole read`() = runBlocking {
+        val reads = mutableListOf<String?>()
+        val result = readRewatchSessionsUntilSettled(
+            dateFrom = "watermark",
+            delays = longArrayOf(0L, 0L),
+            read = { window ->
+                reads += window
+                if (window == null) listOf(sessionRow(7L)) else emptyList()
+            },
+            settled = { sessions -> sessions.any { session -> session.rewatchId == 7L } },
+        )
+
+        assertEquals(listOf("watermark", "watermark", null), reads)
+        assertTrue(result.settled)
+    }
+
+    @Test
+    fun `a delta read that settles is not read whole`() = runBlocking {
+        val reads = mutableListOf<String?>()
+        val result = readRewatchSessionsUntilSettled(
+            dateFrom = "watermark",
+            delays = longArrayOf(0L, 0L),
+            read = { window ->
+                reads += window
+                listOf(sessionRow(7L))
+            },
+            settled = { true },
+        )
+
+        assertEquals(listOf("watermark"), reads)
+        assertTrue(result.settled)
+    }
+
+    @Test
+    fun `a read that never settles reports the last read`() = runBlocking {
+        val result = readRewatchSessionsUntilSettled(
+            dateFrom = "watermark",
+            delays = longArrayOf(0L),
+            read = { emptyList() },
+            settled = { false },
+        )
+
+        assertFalse(result.settled)
+        assertTrue(result.sessions?.isEmpty() == true)
+    }
+
+    @Test
     fun `a mixed show batch is read back as first watches`() {
         val writes = simklHistoryWrites(
             listOf(
@@ -425,6 +472,13 @@ class SimklMutationRepositoryTest {
         assertTrue(writes.none(TrackingHistoryItem::isRewatch))
         assertTrue(writes.all { item -> item.rewatchId == null })
     }
+
+    private fun sessionRow(id: Long) = SimklLibraryEntry(
+        mediaType = SimklMediaType.SHOWS,
+        isRewatch = true,
+        rewatchId = id,
+        rewatchStatus = "active",
+    )
 
     private fun movie() = TrackingMediaReference(
         kind = TrackingMediaKind.MOVIE,

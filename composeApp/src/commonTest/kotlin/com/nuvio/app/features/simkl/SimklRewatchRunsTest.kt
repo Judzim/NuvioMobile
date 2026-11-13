@@ -469,6 +469,37 @@ class SimklRewatchRunsTest {
         )
     }
 
+    @Test
+    fun `a completed pinned session answers the read back`() {
+        val running = rewatchRow(rewatched = listOf(Marked(season = 2, episode = 7)), isRewatch = true)
+        val completed = running.copy(rewatchStatus = "completed")
+
+        assertTrue(listOf(completed).rewatchSessionEnded(1L))
+        assertFalse(listOf(running).rewatchSessionEnded(1L))
+        assertFalse(listOf(completed).rewatchSessionEnded(2L))
+    }
+
+    @Test
+    fun `a flat anime write holds its own item's episode`() {
+        val entry = SimklLibraryEntry(
+            mediaType = SimklMediaType.ANIME,
+            show = SimklMedia(title = "Attack on Titan", ids = mapOf("mal" to jsonValue("16498"))),
+            seasons = listOf(SimklSeason(number = 1, episodes = listOf(SimklEpisode(number = 5)))),
+            isRewatch = true,
+            rewatchId = 7L,
+            rewatchStatus = "active",
+        )
+        val mark = TrackingMediaReference(
+            kind = TrackingMediaKind.ANIME,
+            title = "Attack on Titan",
+            ids = TrackingExternalIds(mal = 16498L),
+            episode = TrackingEpisode(season = null, number = 5),
+        )
+
+        assertTrue(listOf(entry).flatAnimeWriteHolds(mark, episode = 5))
+        assertFalse(listOf(entry).flatAnimeWriteHolds(mark, episode = 6))
+    }
+
     private fun snapshotForRun(): SimklSyncSnapshot {
         val sessionRow = rewatchRow(rewatched = listOf(Marked(season = 2, episode = 7)), isRewatch = true)
         return SimklSyncSnapshot(
