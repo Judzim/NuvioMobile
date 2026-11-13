@@ -522,7 +522,7 @@ class SeriesContinuityTest {
         )
 
         assertNotNull(action)
-        assertEquals("ep10", action.videoId)
+        assertEquals("show:1:10", action.videoId)
     }
 
     @Test
@@ -546,7 +546,7 @@ class SeriesContinuityTest {
         )
 
         assertNotNull(action)
-        assertEquals("ep9", action.videoId)
+        assertEquals("show:1:9", action.videoId)
     }
 
     private fun tenEpisodes(): List<WatchingReleasedEpisode> = (1..10).map { number ->
