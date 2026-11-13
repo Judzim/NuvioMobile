@@ -380,7 +380,7 @@ class SimklMutationReconciliationTest {
                 "episodes": 1,
                 "statuses": [
                   {
-                    "request": {"ids": {"simkl": 1}, "type": "show"},
+                    "request": {"ids": {"simkl": 2090}, "type": "show"},
                     "response": {"rewatch_status": "active"}
                   }
                 ]

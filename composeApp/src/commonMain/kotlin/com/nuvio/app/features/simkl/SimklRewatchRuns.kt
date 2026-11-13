@@ -59,7 +59,7 @@ internal class SimklRewatchItems(library: List<SimklLibraryEntry>) {
      * for is not ruled out, which keeps a show listed as one item as it was.
      */
     fun coversCatalogueSeason(session: SimklLibraryEntry, season: Int): Boolean {
-        val seasons = session.media?.ids?.simklIdValue()?.let(seasonsBySimklId::get).orEmpty()
+        val seasons = session.media?.ids?.simklIdValue()?.let(seasonsBySimklId::get) ?: emptySet()
         return seasons.isEmpty() || season in seasons
     }
 }
@@ -154,7 +154,10 @@ private fun List<SimklLibraryEntry>.runningSessionsForWrite(
     val seriesIds = library
         .filter { row -> !row.isRewatch && row.media?.matchesTarget(target) == true }
         .mapNotNullTo(mutableSetOf()) { row -> row.media?.canonicalContentId()?.lowercase() }
-    val ofSeries = running.filter { entry -> entry.media?.canonicalContentId()?.lowercase() in seriesIds }
+    val ofSeries = running.filter { entry ->
+        val id = entry.media?.canonicalContentId()?.lowercase() ?: return@filter false
+        id in seriesIds
+    }
     return (direct + ofSeries).distinct().filter { session -> items.coversCatalogueSeason(session, season) }
 }
 

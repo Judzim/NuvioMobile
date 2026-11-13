@@ -345,7 +345,7 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             val readContentId = targetContentId
             val readEpisode = targetEpisode
             val readKind = target.kind
-            val pinnedRewatchId = targetItem.rewatchId
+            val pinnedRewatchId = targetItem?.rewatchId
             val writtenFlat = readKind == TrackingMediaKind.ANIME && targetSeason == null
             refreshRewatchSessions { sessions ->
                 val holds = if (writtenFlat) {

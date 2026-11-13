@@ -238,7 +238,7 @@ internal fun simklHistoryRewatchWasRecorded(status: String?, addedCount: Int): B
     }
 
 /** What the detail screen tells the user after an explicit Mark as rewatched. */
-internal enum class RewatchMarkOutcome {
+enum class RewatchMarkOutcome {
     RECORDED,
     TOO_SOON,
     NOT_RECORDED,

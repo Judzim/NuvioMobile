@@ -286,7 +286,7 @@ internal fun SimklSyncSnapshot.priorWatchForMark(
  * them is a first watch and must not join a run.
  */
 private fun SimklSyncSnapshot.summaryPriorWatchForMark(media: TrackingMediaReference): SimklPriorWatch {
-    val entry = matchingEntry(
+    val entry = entries.matchingEntry(
         SimklScrobbleResult(
             outcome = SimklScrobbleOutcome.START,
             playbackId = null,

@@ -1360,9 +1360,11 @@ object WatchProgressRepository {
         // below its bar the source keeps a pause, and marking the item watched here would show it
         // watched next to the position the source offers to resume.
         val appBarReached = durationMs > 0L &&
-            positionMs.toDouble() / durationMs.toDouble() >= WatchProgressCompletionPercentThreshold / 100.0
-        val completionFraction = (if (appBarReached) sourceCompletionThreshold(contentEndPercent) else null)
-            ?: completionFractionFor(contentEndPercent)
+            positionMs.toDouble() / durationMs.toDouble() >=
+            WatchProgressCompletionPercentThreshold.toDouble() / 100.0
+        val completionFraction = (
+            if (appBarReached) sourceCompletionThreshold(contentEndPercent)?.toDouble() else null
+            ) ?: completionFractionFor(contentEndPercent)
         val isCompleted = isWatchProgressComplete(
             positionMs = positionMs,
             durationMs = durationMs,

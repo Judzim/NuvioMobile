@@ -439,7 +439,7 @@ class SimklMutationRepositoryTest {
             settled = { true },
         )
 
-        assertEquals(listOf("watermark"), reads)
+        assertEquals(listOf<String?>("watermark"), reads)
         assertTrue(result.settled)
     }
 
