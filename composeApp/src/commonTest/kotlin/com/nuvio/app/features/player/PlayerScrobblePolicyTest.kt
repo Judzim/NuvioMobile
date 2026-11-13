@@ -45,4 +45,44 @@ class PlayerScrobblePolicyTest {
         )
         assertTrue(shouldSendStopScrobble(hasActiveScrobble = true, progressPercent = 50f))
     }
+
+    @Test
+    fun `a stop no session owns is sessionless`() {
+        assertTrue(
+            isSessionlessStop(
+                hasOpenedSession = false,
+                hasActiveScrobble = true,
+                hasStartAboveCompletionBar = false,
+                progressPercent = 95f,
+            ),
+        )
+        assertFalse(
+            isSessionlessStop(
+                hasOpenedSession = true,
+                hasActiveScrobble = true,
+                hasStartAboveCompletionBar = false,
+                progressPercent = 95f,
+            ),
+        )
+    }
+
+    @Test
+    fun `a below-bar stop of an above-bar start is sessionless`() {
+        assertTrue(
+            isSessionlessStop(
+                hasOpenedSession = true,
+                hasActiveScrobble = false,
+                hasStartAboveCompletionBar = true,
+                progressPercent = 70f,
+            ),
+        )
+        assertFalse(
+            isSessionlessStop(
+                hasOpenedSession = true,
+                hasActiveScrobble = false,
+                hasStartAboveCompletionBar = true,
+                progressPercent = 95f,
+            ),
+        )
+    }
 }

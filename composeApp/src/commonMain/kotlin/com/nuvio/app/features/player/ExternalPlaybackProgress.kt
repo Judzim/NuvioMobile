@@ -104,6 +104,7 @@ internal suspend fun recordExternalPlaybackProgress(
                         progressPercent = progressPercent,
                         contentEndPercent = contentEndPercent,
                         startProgressPercent = startProgressPercent,
+                        sessionless = startedAboveCompletionBar,
                         hasPlaybackSession = !startedAboveCompletionBar,
                         playbackId = nextScrobblePlaybackId(),
                     ),

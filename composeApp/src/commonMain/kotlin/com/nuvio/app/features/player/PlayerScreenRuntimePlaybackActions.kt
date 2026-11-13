@@ -391,14 +391,19 @@ private fun PlayerScreenRuntime.emitTrackingScrobbleTerminal(
         return
     }
     /*
-     * A pause or a stop below the bar for a playback no session owns: the trackers that take such
-     * reports hear where the user left it, and the ones that would read it as a finished watch never
-     * see it. Above the bar the stop stays as it is for everyone, because there it is the finish of a
-     * viewing and the trackers that record it have to hear about it.
+     * A pause or a stop for a playback no session owns: the trackers that take such reports hear
+     * where the user left it, and the ones that would read it as a finished watch never see it.
      */
-    val sessionless = !hasRequestedScrobbleStartForCurrentItem &&
-        hasSentStartAboveCompletionBarForCurrentItem &&
-        (action == TrackingScrobbleAction.PAUSE || percent < TRACKING_COMPLETION_BAR_PERCENT.toFloat())
+    val sessionless = if (action == TrackingScrobbleAction.PAUSE) {
+        !hasRequestedScrobbleStartForCurrentItem && hasSentStartAboveCompletionBarForCurrentItem
+    } else {
+        isSessionlessStop(
+            hasOpenedSession = hasOpenedScrobbleSessionForCurrentItem,
+            hasActiveScrobble = hasRequestedScrobbleStartForCurrentItem,
+            hasStartAboveCompletionBar = hasSentStartAboveCompletionBarForCurrentItem,
+            progressPercent = percent,
+        )
+    }
     val mediaSnapshot = currentTrackingMedia
     val inputsSnapshot = snapshotTrackingScrobbleItemInputs()
     // IntroDB knows where the credits start, and a playback that reached them is over for the tracker
@@ -496,6 +501,26 @@ internal fun shouldSendPauseScrobble(
  * Same as the pause, plus the rule the completion bar already had: a stop above the bar stands on its
  * own, because that is where a viewing ends and the trackers have to hear about the finish.
  */
+/**
+ * Whether a stop belongs to no playback session.
+ *
+ * A playback that never opened a session below the bar finishes a viewing the trackers counted
+ * already, and Trakt and MDBList record a watch on every stop from the bar up, so hearing this stop
+ * would count the same viewing twice. A seek back below the bar opens a session, and the stop of
+ * that playback is a viewing of its own.
+ */
+internal fun isSessionlessStop(
+    hasOpenedSession: Boolean,
+    hasActiveScrobble: Boolean,
+    hasStartAboveCompletionBar: Boolean,
+    progressPercent: Float,
+): Boolean = !hasOpenedSession ||
+    (
+        !hasActiveScrobble &&
+            hasStartAboveCompletionBar &&
+            progressPercent.toDouble() < TRACKING_COMPLETION_BAR_PERCENT
+        )
+
 internal fun shouldSendStopScrobble(
     hasActiveScrobble: Boolean,
     progressPercent: Float,
