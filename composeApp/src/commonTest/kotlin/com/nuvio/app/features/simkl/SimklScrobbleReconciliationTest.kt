@@ -247,6 +247,36 @@ class SimklScrobbleReconciliationTest {
     }
 
     @Test
+    fun `a flat anime episode is a repeat by its unique number`() {
+        val media = animeMedia(simklId = 3000L, imdb = "tt2560140", mal = 16498L)
+        val snapshot = SimklSyncSnapshot(
+            entries = listOf(
+                SimklLibraryEntry(
+                    mediaType = SimklMediaType.ANIME,
+                    show = media,
+                    seasons = listOf(
+                        SimklSeason(
+                            number = null,
+                            episodes = listOf(
+                                SimklEpisode(number = 5, watchedAt = "2023-01-01T00:00:00Z"),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val mark = TrackingMediaReference(
+            kind = TrackingMediaKind.ANIME,
+            title = "Attack on Titan",
+            year = 2013,
+            ids = TrackingExternalIds(mal = 16498L),
+            episode = TrackingEpisode(season = null, number = 5),
+        )
+
+        assertTrue(snapshot.priorWatchForMark(mark, mark).wasWatched)
+    }
+
+    @Test
     fun `a mark of an unwatched title stays a first watch`() {
         val media = showMedia(2090L, "tt1520211")
         val snapshot = SimklSyncSnapshot(

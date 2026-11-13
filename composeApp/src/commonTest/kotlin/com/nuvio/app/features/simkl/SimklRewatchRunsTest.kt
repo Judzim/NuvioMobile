@@ -422,6 +422,53 @@ class SimklRewatchRunsTest {
         )
     }
 
+    @Test
+    fun `a flat anime session holds a uniquely numbered episode`() {
+        val entry = SimklLibraryEntry(
+            mediaType = SimklMediaType.ANIME,
+            show = SimklMedia(title = "Attack on Titan", ids = mapOf("mal" to jsonValue("16498"))),
+            seasons = listOf(SimklSeason(number = 1, episodes = listOf(SimklEpisode(number = 5)))),
+            isRewatch = true,
+            rewatchId = 7L,
+            rewatchStatus = "active",
+        )
+        val contentId = requireNotNull(entry.media?.canonicalContentId())
+
+        assertTrue(
+            listOf(entry).rewatchSessionHolds(
+                contentId = contentId,
+                kind = TrackingMediaKind.ANIME,
+                season = null,
+                episode = 5,
+            ),
+        )
+    }
+
+    @Test
+    fun `a number in two seasons does not hold a flat anime mark`() {
+        val entry = SimklLibraryEntry(
+            mediaType = SimklMediaType.ANIME,
+            show = SimklMedia(title = "Attack on Titan", ids = mapOf("mal" to jsonValue("16498"))),
+            seasons = listOf(
+                SimklSeason(number = 1, episodes = listOf(SimklEpisode(number = 5))),
+                SimklSeason(number = 2, episodes = listOf(SimklEpisode(number = 5))),
+            ),
+            isRewatch = true,
+            rewatchId = 7L,
+            rewatchStatus = "active",
+        )
+        val contentId = requireNotNull(entry.media?.canonicalContentId())
+
+        assertFalse(
+            listOf(entry).rewatchSessionHolds(
+                contentId = contentId,
+                kind = TrackingMediaKind.ANIME,
+                season = null,
+                episode = 5,
+            ),
+        )
+    }
+
     private fun snapshotForRun(): SimklSyncSnapshot {
         val sessionRow = rewatchRow(rewatched = listOf(Marked(season = 2, episode = 7)), isRewatch = true)
         return SimklSyncSnapshot(

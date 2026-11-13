@@ -292,6 +292,26 @@ internal fun List<SimklLibraryEntry>.rewatchedEpisodesOf(contentId: String): Set
         .map { episode -> episode.seasonNumber to episode.episodeNumber }
         .toSet()
 
+/**
+ * Whether the running session of the item holds the episode a mark just wrote.
+ *
+ * The read-back only uses this to stop waiting; the account's read is adopted either way. The exact
+ * season is tried first. A flat anime session can list its episodes without a season number, so a
+ * unique episode number decides when the exact pair is not there; a number that appears in more than
+ * one season is not accepted, because the write cannot be told apart from the other viewing.
+ */
+internal fun List<SimklLibraryEntry>.rewatchSessionHolds(
+    contentId: String,
+    kind: TrackingMediaKind,
+    season: Int?,
+    episode: Int,
+): Boolean {
+    val rewatched = rewatchedEpisodesOf(contentId)
+    val exactPair = rewatched.contains((season ?: 0) to episode)
+    if (exactPair || kind != TrackingMediaKind.ANIME) return exactPair
+    return rewatched.count { (_, number) -> number == episode } == 1
+}
+
 internal fun SimklMedia.rewatchMatchKeys(contentId: String): List<String> = buildList {
     add(contentId)
     ids.idValue("imdb")?.let { imdb -> add(imdb); add("imdb:$imdb") }

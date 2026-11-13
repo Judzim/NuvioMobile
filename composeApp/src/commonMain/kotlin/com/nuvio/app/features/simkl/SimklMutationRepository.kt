@@ -305,13 +305,37 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         // The run this mark opened or extended is not in the snapshot until a read sees it. Read it
         // back in the background and adopt the derived runs; a failure must not turn a recorded mark
         // into an error. A settlement predicate keeps the read going until the episode shows up.
-        val target = writes.firstOrNull { item -> item.isRewatch }?.media
-        val targetContentId = target?.catalog?.contentId?.takeIf(String::isNotBlank)
+        val targetItem = writes.firstOrNull { item -> item.isRewatch }
+        val target = targetItem?.media
+        // The running session is found by its id, so its own canonical id is used for the read
+        // back. A flat anime session can resolve to a different id form than the catalogue item.
+        val sessionContentId = targetItem?.rewatchId?.let { rewatchId ->
+            snapshot.rewatchSessions
+                .firstOrNull { session ->
+                    session.rewatchId == rewatchId && session.isRunningRewatchSession()
+                }
+                ?.media
+                ?.canonicalContentId()
+                ?.takeIf(String::isNotBlank)
+        }
+        val targetContentId = sessionContentId
+            ?: target?.let { media ->
+                media.toSimklMedia().canonicalContentId()?.takeIf(String::isNotBlank)
+            }
+            ?: target?.catalog?.contentId?.takeIf(String::isNotBlank)
         val targetSeason = target?.episode?.season
         val targetEpisode = target?.episode?.number
-        if (result.isComplete && targetContentId != null && targetSeason != null && targetEpisode != null) {
+        if (result.isComplete && target != null && targetContentId != null && targetEpisode != null) {
+            val readContentId = targetContentId
+            val readEpisode = targetEpisode
+            val readKind = target.kind
             refreshRewatchSessions { sessions ->
-                sessions.rewatchedEpisodesOf(targetContentId).contains(targetSeason to targetEpisode)
+                sessions.rewatchSessionHolds(
+                    contentId = readContentId,
+                    kind = readKind,
+                    season = targetSeason,
+                    episode = readEpisode,
+                )
             }
         }
         return result
