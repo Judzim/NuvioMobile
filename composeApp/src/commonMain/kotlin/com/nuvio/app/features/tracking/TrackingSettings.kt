@@ -53,8 +53,13 @@ object TrackingSettingsRepository {
     suspend fun setSimklRewatchMode(mode: SimklRewatchMode) {
         TraktSettingsRepository.setSimklRewatchMode(mode)
         SimklSyncRepository.refreshRewatchRuns()
-        if (mode != SimklRewatchMode.OFF) {
-            // The same read the Sync now button forces, so the switch never needs one by hand.
+        if (
+            mode != SimklRewatchMode.OFF &&
+            !SimklSyncRepository.state.value.snapshot.rewatchSessionsComplete
+        ) {
+            // Only a snapshot whose sessions were never read needs the cold read; a complete one
+            // already holds them. The refresh runs on the repository's own scope, so leaving this
+            // screen cannot cancel it.
             SimklSyncRepository.refreshAsync(TrackingRefreshIntent.USER_INITIATED)
         }
     }
