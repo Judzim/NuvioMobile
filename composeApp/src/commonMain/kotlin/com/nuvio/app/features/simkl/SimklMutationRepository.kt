@@ -276,19 +276,25 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         val mode = TrackingSettingsRepository.uiState.value.simklRewatchMode
         val accountType = SimklAuthRepository.uiState.value.accountType
         val resolved = items.map { item ->
-            val enriched = snapshot.enrichMediaReference(item.media).resolveAnimeEpisodeForSimkl()
-            val runningSessionId = snapshot.rewatchSessions.activeRewatchSessionId(enriched)
+            val catalogue = snapshot.enrichMediaReference(item.media)
+            val enriched = catalogue.resolveAnimeEpisodeForSimkl()
+            val repeatViewing = snapshot.priorWatchForMark(catalogue, enriched).wasWatched ||
+                snapshot.markContinuesRunningRewatch(enriched)
             if (
                 shouldRecordSimklRewatchOnMark(
                     mode = mode,
                     accountType = accountType,
-                    isRepeatViewing = snapshot.entries.hasWatchedTitle(enriched),
-                    hasRunningSession = runningSessionId != null,
+                    isRepeatViewing = repeatViewing,
+                    explicitRewatch = item.isRewatch,
                 )
             ) {
-                item.copy(media = enriched, isRewatch = true, rewatchId = runningSessionId)
+                item.copy(
+                    media = enriched,
+                    isRewatch = true,
+                    rewatchId = snapshot.rewatchSessions.activeRewatchSessionId(enriched),
+                )
             } else {
-                item.copy(media = enriched)
+                item.copy(media = enriched, isRewatch = false, rewatchId = null)
             }
         }
         val result = service.addToHistory(resolved)

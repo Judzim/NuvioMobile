@@ -1,5 +1,9 @@
 package com.nuvio.app.features.simkl
 
+import com.nuvio.app.features.tracking.TrackingEpisode
+import com.nuvio.app.features.tracking.TrackingExternalIds
+import com.nuvio.app.features.tracking.TrackingMediaKind
+import com.nuvio.app.features.tracking.TrackingMediaReference
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -201,6 +205,65 @@ class SimklScrobbleReconciliationTest {
         assertFalse(local.matchesTarget(sharedAnimeId))
         assertTrue(local.matchesTarget(sharedImdb))
     }
+
+    @Test
+    fun `a marked episode the account already watched is a repeat`() {
+        val media = showMedia(2090L, "tt1520211")
+        val snapshot = SimklSyncSnapshot(
+            entries = listOf(
+                SimklLibraryEntry(
+                    mediaType = SimklMediaType.SHOWS,
+                    show = media,
+                    seasons = listOf(
+                        SimklSeason(
+                            number = 2,
+                            episodes = listOf(SimklEpisode(number = 7, watchedAt = "2023-01-01T00:00:00Z")),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val mark = showMark(season = 2, episode = 7)
+
+        assertTrue(snapshot.priorWatchForMark(mark, mark).wasWatched)
+    }
+
+    @Test
+    fun `summary markers decide a mark when the account sends no episode rows`() {
+        val media = showMedia(2090L, "tt1520211")
+        val snapshot = SimklSyncSnapshot(
+            entries = listOf(
+                SimklLibraryEntry(
+                    mediaType = SimklMediaType.SHOWS,
+                    show = media,
+                    lastWatched = "S02E07",
+                    nextToWatch = "S02E08",
+                ),
+            ),
+        )
+
+        assertTrue(snapshot.priorWatchForMark(showMark(2, 7), showMark(2, 7)).wasWatched)
+        assertFalse(snapshot.priorWatchForMark(showMark(2, 8), showMark(2, 8)).wasWatched)
+    }
+
+    @Test
+    fun `a mark of an unwatched title stays a first watch`() {
+        val media = showMedia(2090L, "tt1520211")
+        val snapshot = SimklSyncSnapshot(
+            entries = listOf(SimklLibraryEntry(mediaType = SimklMediaType.SHOWS, show = media)),
+        )
+        val mark = showMark(season = 1, episode = 1)
+
+        assertFalse(snapshot.priorWatchForMark(mark, mark).wasWatched)
+    }
+
+    private fun showMark(season: Int, episode: Int) = TrackingMediaReference(
+        kind = TrackingMediaKind.SHOW,
+        title = "The Walking Dead",
+        year = 2010,
+        ids = TrackingExternalIds(imdb = "tt1520211"),
+        episode = TrackingEpisode(season = season, number = episode),
+    )
 
     private fun showMedia(simklId: Long, imdb: String) = SimklMedia(
         title = "The Walking Dead",

@@ -145,22 +145,40 @@ internal fun List<SimklLibraryEntry>.activeRewatchSessionIdForRemoval(
 }
 
 /**
- * Whether the account already holds a watch of this item's title, which a manual mark reads as a
- * possible repeat viewing.
+ * Whether a mark of this item is the next step of the account's running run.
  *
- * Simkl records a plain add of something already watched as nothing at all, so a mark that may be a
- * repeat has to travel as one. The check is deliberately coarse: it asks whether the account watched
- * the title at all, not whether it holds exactly this episode, because the account has the last word
- * either way and a write it reads as a first watch comes back as `first_watch` and is still recorded.
- * What it must not do is send a rewatch for a title the account has never watched, which is where an
- * empty session would come from.
+ * A manual mark was resolved by the exact episode history alone. The account can report a watched
+ * title without the episode rows, and then the Continue Watching mark of the run's next step
+ * travelled as a plain add, which Simkl records as nothing: the session never moved and the card
+ * stayed. A mark of the episode after the run position, or of an episode the session already holds,
+ * now travels as the rewatch it is. A mark away from the run still stays a first watch.
+ *
+ * The rule is only read where the account returned no watched episode rows at all: with rows
+ * present, an exact miss is a first watch, and a mark of a new episode must not be pulled into the
+ * run.
  */
-internal fun List<SimklLibraryEntry>.hasWatchedTitle(reference: TrackingMediaReference): Boolean {
-    val target = reference.toSimklMedia()
-    val entry = firstOrNull { entry -> entry.media?.matchesTarget(target) == true } ?: return false
-    return entry.status == SimklListStatus.COMPLETED ||
-        entry.lastWatchedAt != null ||
-        entry.seasons.any { season -> season.episodes.any { episode -> episode.watchedAt != null } }
+internal fun SimklSyncSnapshot.markContinuesRunningRewatch(media: TrackingMediaReference): Boolean {
+    val episode = media.episode ?: return false
+    val target = media.toSimklMedia()
+    val entry = entries.firstOrNull { entry -> entry.media?.matchesTarget(target) == true }
+        ?: return false
+    if (entry.seasons.any { season -> season.episodes.any { item -> item.watchedAt != null } }) {
+        return false
+    }
+    val run = rewatchRuns.firstOrNull { run ->
+        run.matches(media.catalog?.contentId) || run.matches(target.canonicalContentId())
+    } ?: return false
+    val number = episode.number
+    if ((episode.season ?: 0) to number in rewatchSessions.rewatchedEpisodesOf(run.contentId)) {
+        return true
+    }
+    return when {
+        run.seasonNumber == 0 -> (episode.season ?: 0) == 0 && number == run.episodeNumber + 1
+        episode.season == null -> false
+        // A season boundary is not a step the run can know without the episode list: episodes after
+        // the run may still exist in the same season, so only a gap inside the season is read here.
+        else -> episode.season == run.seasonNumber && number == run.episodeNumber + 1
+    }
 }
 
 

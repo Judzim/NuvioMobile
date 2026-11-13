@@ -384,43 +384,60 @@ class SimklRewatchRunsTest {
     )
 
     @Test
-    fun `only a title the account has watched reads as a possible repeat`() {
-        val watchedByStatus = SimklLibraryEntry(
-            mediaType = SimklMediaType.SHOWS,
-            status = SimklListStatus.COMPLETED,
-            show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
-        )
-        val watchedByEpisode = SimklLibraryEntry(
-            mediaType = SimklMediaType.SHOWS,
-            show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
-            seasons = listOf(
-                SimklSeason(number = 2, episodes = listOf(SimklEpisode(number = 7, watchedAt = OLD))),
+    fun `a mark of the run step continues the run when the account sends no episode rows`() {
+        val snapshot = snapshotForRun()
+
+        assertTrue(
+            snapshot.markContinuesRunningRewatch(
+                episode().copy(episode = TrackingEpisode(season = 2, number = 8)),
             ),
         )
-        val watchedOnlyByTheRowDate = SimklLibraryEntry(
-            mediaType = SimklMediaType.SHOWS,
-            lastWatchedAt = OLD,
-            show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
+        // An episode the session already holds is part of the run as well.
+        assertTrue(snapshot.markContinuesRunningRewatch(episode()))
+        assertFalse(
+            snapshot.markContinuesRunningRewatch(
+                episode().copy(episode = TrackingEpisode(season = 2, number = 9)),
+            ),
         )
-        val neverWatched = SimklLibraryEntry(
-            mediaType = SimklMediaType.SHOWS,
-            show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
-        )
-        val anotherShow = SimklLibraryEntry(
-            mediaType = SimklMediaType.SHOWS,
-            status = SimklListStatus.COMPLETED,
-            show = SimklMedia(
-                title = "Something else",
-                year = 2001,
-                ids = mapOf("imdb" to jsonValue("tt0000001")),
+    }
+
+    @Test
+    fun `episode rows keep a new episode out of the run`() {
+        val snapshot = snapshotForRun().copy(
+            entries = listOf(
+                SimklLibraryEntry(
+                    mediaType = SimklMediaType.SHOWS,
+                    show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
+                    seasons = listOf(
+                        SimklSeason(number = 2, episodes = listOf(SimklEpisode(number = 7, watchedAt = OLD))),
+                    ),
+                ),
             ),
         )
 
-        assertTrue(listOf(watchedByStatus).hasWatchedTitle(episode()))
-        assertTrue(listOf(watchedByEpisode).hasWatchedTitle(episode()))
-        assertTrue(listOf(watchedOnlyByTheRowDate).hasWatchedTitle(episode()))
-        assertFalse(listOf(neverWatched).hasWatchedTitle(episode()))
-        assertFalse(listOf(anotherShow).hasWatchedTitle(episode()))
+        assertFalse(
+            snapshot.markContinuesRunningRewatch(
+                episode().copy(episode = TrackingEpisode(season = 2, number = 8)),
+            ),
+        )
+    }
+
+    private fun snapshotForRun(): SimklSyncSnapshot {
+        val sessionRow = rewatchRow(rewatched = listOf(Marked(season = 2, episode = 7)), isRewatch = true)
+        return SimklSyncSnapshot(
+            entries = listOf(
+                SimklLibraryEntry(
+                    mediaType = SimklMediaType.SHOWS,
+                    show = SimklMedia(title = "Dark", year = 2017, ids = darkIds),
+                ),
+            ),
+            rewatchSessions = listOf(sessionRow),
+            rewatchRuns = deriveSimklRewatchRuns(
+                entries = listOf(sessionRow),
+                animeIdPreference = DEFAULT_SIMKL_ANIME_ID_PREFERENCE,
+                offerRuns = true,
+            ),
+        )
     }
 
     private fun runsFor(

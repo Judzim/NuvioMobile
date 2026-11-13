@@ -146,7 +146,7 @@ object WatchingActions {
             val result = runCatching {
                 SimklMutationRepository.addToHistory(
                     profileId = ProfileRepository.activeProfileId,
-                    items = listOf(TrackingHistoryItem(media = media)),
+                    items = listOf(TrackingHistoryItem(media = media, isRewatch = true)),
                 )
             }.getOrNull()
             onResult(result?.isComplete == true)

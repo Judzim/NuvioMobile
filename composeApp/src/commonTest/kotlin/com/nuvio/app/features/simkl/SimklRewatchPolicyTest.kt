@@ -120,13 +120,22 @@ class SimklRewatchPolicyTest {
         // because there is nothing to repeat.
         assertFalse(shouldRecordSimklRewatchOnMark(SimklRewatchMode.AUTOMATIC, "pro", isRepeatViewing = false))
 
-        // A run the account already holds makes the mark part of it either way.
+        // An explicit Mark as rewatched asks for one even when the local history does not know the
+        // episode yet.
         assertTrue(
             shouldRecordSimklRewatchOnMark(
                 mode = SimklRewatchMode.AUTOMATIC,
                 accountType = "pro",
                 isRepeatViewing = false,
-                hasRunningSession = true,
+                explicitRewatch = true,
+            ),
+        )
+        assertFalse(
+            shouldRecordSimklRewatchOnMark(
+                mode = SimklRewatchMode.OFF,
+                accountType = "pro",
+                isRepeatViewing = false,
+                explicitRewatch = true,
             ),
         )
     }
