@@ -37,6 +37,47 @@ internal fun deriveSimklRewatchRuns(
         .sortedByDescending(RewatchRunPosition::markedAtEpochMs)
 }
 
+/**
+ * Which catalogue seasons the account's Simkl items hold, for the writes.
+ *
+ * A session lists only what it rewatched, while the library row of its item lists every episode
+ * with its TVDB season. That is what tells which item a write of a season lands on, also for a
+ * season the rewatch has not reached yet. The rows are matched by the Simkl id only: the seasons of
+ * one anime share their IMDB and TVDB ids, so matching on those could read another season's row.
+ */
+internal class SimklRewatchItems(library: List<SimklLibraryEntry>) {
+    private val seasonsBySimklId: Map<String, Set<Int>> = buildMap {
+        library.forEach { entry ->
+            if (entry.isRewatch) return@forEach
+            val simklId = entry.media?.ids?.simklIdValue() ?: return@forEach
+            if (!containsKey(simklId)) put(simklId, entry.catalogueSeasons())
+        }
+    }
+
+    /**
+     * Whether the session's item holds this catalogue season. An item the library has no mapping
+     * for is not ruled out, which keeps a show listed as one item as it was.
+     */
+    fun coversCatalogueSeason(session: SimklLibraryEntry, season: Int): Boolean {
+        val seasons = session.media?.ids?.simklIdValue()?.let(seasonsBySimklId::get).orEmpty()
+        return seasons.isEmpty() || season in seasons
+    }
+}
+
+/** A mapping that names both a season and an episode, the only kind a position can be read from. */
+private fun SimklEpisodeMapping.completeOrNull(): SimklEpisodeMapping? =
+    takeIf { mapping -> mapping.season != null && (mapping.episode ?: 0) > 0 }
+
+/** Whether the row maps any of its episodes to a TVDB season and episode. */
+private fun SimklLibraryEntry.hasTvdbMapping(): Boolean =
+    seasons.any { season -> season.episodes.any { episode -> episode.tvdb?.completeOrNull() != null } }
+
+/** The catalogue seasons a library row maps its episodes to. */
+private fun SimklLibraryEntry.catalogueSeasons(): Set<Int> =
+    seasons.flatMapTo(mutableSetOf()) { season ->
+        season.episodes.mapNotNull { episode -> episode.tvdb?.completeOrNull()?.season }
+    }
+
 private const val ACTIVE_REWATCH_STATUS = "active"
 
 /**
@@ -80,15 +121,41 @@ internal fun mergeRewatchSessions(
  * one the user is in is the one the account touched last. Used to release a rewatch answer once the
  * run it asked for is real on the account.
  */
-internal fun List<SimklLibraryEntry>.activeRewatchSessionId(media: TrackingMediaReference): Long? {
+internal fun List<SimklLibraryEntry>.activeRewatchSessionId(
+    media: TrackingMediaReference,
+    library: List<SimklLibraryEntry> = emptyList(),
+): Long? = runningSessionsForWrite(media, library)
+    .maxByOrNull { entry -> entry.lastWatchedAt?.let(::parseSimklUtcEpochMs) ?: Long.MIN_VALUE }
+    ?.rewatchId
+
+/**
+ * The running sessions of the item a write lands on.
+ *
+ * Without the [library] a session is found by the ids the write carries, as before. An anime whose
+ * seasons Simkl lists as separate items breaks that: a write that names the series and a season
+ * matches the first season's item by its IMDB id, while the later season's item can carry so few ids
+ * that it matches by title only, or not at all once the reference took another season's ids. The
+ * library finds the sessions of the whole series instead, and keeps only the items it maps to the
+ * written season: pinning another season's session would put the viewing into the wrong run.
+ */
+private fun List<SimklLibraryEntry>.runningSessionsForWrite(
+    media: TrackingMediaReference,
+    library: List<SimklLibraryEntry>,
+): List<SimklLibraryEntry> {
     val target = media.toSimklMedia()
-    return filter { entry ->
-        entry.isRewatch &&
-            entry.media?.matchesTarget(target) == true &&
-            entry.isRunningRewatchSession()
-    }
-        .maxByOrNull { entry -> entry.lastWatchedAt?.let(::parseSimklUtcEpochMs) ?: Long.MIN_VALUE }
-        ?.rewatchId
+    val running = filter { entry -> entry.isRewatch && entry.isRunningRewatchSession() }
+    val direct = running.filter { entry -> entry.media?.matchesTarget(target) == true }
+    // A write without a season names its item by its own ids (an anime written flat, by the anime
+    // id of that season's item), so only that item's sessions are its own. Looking through the
+    // series would pin another season's session to it.
+    val season = media.episode?.season?.takeIf { season -> season > 0 }
+    if (library.isEmpty() || season == null) return direct
+    val items = SimklRewatchItems(library)
+    val seriesIds = library
+        .filter { row -> !row.isRewatch && row.media?.matchesTarget(target) == true }
+        .mapNotNullTo(mutableSetOf()) { row -> row.media?.canonicalContentId()?.lowercase() }
+    val ofSeries = running.filter { entry -> entry.media?.canonicalContentId()?.lowercase() in seriesIds }
+    return (direct + ofSeries).distinct().filter { session -> items.coversCatalogueSeason(session, season) }
 }
 
 /**
@@ -101,20 +168,30 @@ internal fun List<SimklLibraryEntry>.activeRewatchSessionIdForEpisode(
     media: TrackingMediaReference,
     seasonNumber: Int?,
     episodeNumber: Int,
-): Long? {
-    val target = media.toSimklMedia()
-    return filter { entry ->
-        entry.isRewatch &&
-            entry.media?.matchesTarget(target) == true &&
-            entry.isRunningRewatchSession() &&
-            entry.rewatchedEpisodes().any { episode ->
-                episode.episodeNumber == episodeNumber &&
-                    (seasonNumber == null || episode.seasonNumber == seasonNumber)
-            }
+    library: List<SimklLibraryEntry> = emptyList(),
+): Long? = runningSessionsForWrite(
+    media = if (seasonNumber == null) media.copy(episode = null) else media,
+    library = library,
+).newestHolding(seasonNumber, episodeNumber)
+
+/** The most recently watched of these sessions that holds the episode. */
+private fun List<SimklLibraryEntry>.newestHolding(seasonNumber: Int?, episodeNumber: Int): Long? =
+    filter { entry ->
+        entry.rewatchedEpisodes().any { episode ->
+            episode.episodeNumber == episodeNumber &&
+                (seasonNumber == null || episode.seasonNumber == seasonNumber)
+        } ||
+            // A season the catalogue names can be another item's own season 1 (an anime lists each
+            // season as its own item), so the catalogue's numbering is read as well.
+            (
+                seasonNumber != null &&
+                    entry.catalogueRewatchedEpisodes().any { episode ->
+                        episode.seasonNumber == seasonNumber && episode.episodeNumber == episodeNumber
+                    }
+                )
     }
         .maxByOrNull { entry -> entry.lastWatchedAt?.let(::parseSimklUtcEpochMs) ?: Long.MIN_VALUE }
         ?.rewatchId
-}
 
 /**
  * The session id a removal may name, using the reference the user marked.
@@ -128,9 +205,10 @@ internal fun List<SimklLibraryEntry>.activeRewatchSessionIdForRemoval(
     seasonNumber: Int?,
     episodeNumber: Int,
     animeEpisodeNumber: Int? = null,
+    library: List<SimklLibraryEntry> = emptyList(),
 ): Long? {
     if (seasonNumber == null && media.kind != TrackingMediaKind.ANIME) return null
-    activeRewatchSessionIdForEpisode(media, seasonNumber, episodeNumber)?.let { return it }
+    activeRewatchSessionIdForEpisode(media, seasonNumber, episodeNumber, library)?.let { return it }
     if (media.kind != TrackingMediaKind.ANIME) return null
     // A TV catalogue may name a season while Simkl lists the anime flat. The anime-native number
     // can differ from the catalogue number (TVDB S2E20 is often absolute episode 7), so try the
@@ -139,9 +217,13 @@ internal fun List<SimklLibraryEntry>.activeRewatchSessionIdForRemoval(
         animeEpisodeNumber?.let(::add)
         if (episodeNumber !in this) add(episodeNumber)
     }
-    return flatNumbers.firstNotNullOfOrNull { number ->
-        activeRewatchSessionIdForEpisode(media, null, number)
-    }
+    // With a season the flat numbers are looked for on the items of that season only: another
+    // season's item has the same numbers from 1.
+    val sessions = runningSessionsForWrite(
+        media = if (seasonNumber == null) media.copy(episode = null) else media,
+        library = library,
+    )
+    return flatNumbers.firstNotNullOfOrNull { number -> sessions.newestHolding(null, number) }
 }
 
 /**
@@ -169,7 +251,8 @@ internal fun SimklSyncSnapshot.markContinuesRunningRewatch(media: TrackingMediaR
         run.matches(media.catalog?.contentId) || run.matches(target.canonicalContentId())
     } ?: return false
     val number = episode.number
-    if ((episode.season ?: 0) to number in rewatchSessions.rewatchedEpisodesOf(run.contentId)) {
+    // The run is in the catalogue's numbering, so the episodes it holds are read in the same one.
+    if ((episode.season ?: 0) to number in rewatchSessions.rewatchedCatalogueEpisodesOf(run.contentId)) {
         return true
     }
     return when {
@@ -201,7 +284,7 @@ private fun buildRewatchRun(
     rows: List<SimklLibraryEntry>,
 ): RewatchRunPosition? {
     val episodes = rows
-        .flatMap { row -> row.rewatchedEpisodes() }
+        .flatMap(SimklLibraryEntry::catalogueRewatchedEpisodes)
         .newestPerEpisode()
     if (episodes.isEmpty()) return null
     val newest = episodes.maxWith(
@@ -217,14 +300,15 @@ private fun buildRewatchRun(
     val position = chain.maxBy { episode -> episode.episodeNumber }
     return RewatchRunPosition(
         contentId = contentId,
-        matchKeys = rows.firstNotNullOfOrNull(SimklLibraryEntry::media)?.rewatchMatchKeys(contentId).orEmpty(),
+        // Every item of the series, so a card or a dismissal under any of their ids finds the run.
+        matchKeys = rows.flatMap { row -> row.media?.rewatchMatchKeys(contentId).orEmpty() }.distinct(),
         seasonNumber = position.seasonNumber,
         episodeNumber = position.episodeNumber,
         markedAtEpochMs = newest.watchedAtEpochMs ?: position.watchedAtEpochMs ?: 0L,
     )
 }
 
-private data class RewatchedEpisode(
+internal data class RewatchedEpisode(
     val seasonNumber: Int,
     val episodeNumber: Int,
     val watchedAtEpochMs: Long?,
@@ -233,21 +317,52 @@ private data class RewatchedEpisode(
         seasonNumber == other.seasonNumber && episodeNumber == other.episodeNumber
 }
 
+/** One episode of a session, with the TVDB mapping the row carried. */
+private data class SessionEpisodeRow(
+    val tvdb: SimklEpisodeMapping?,
+    val rewatched: RewatchedEpisode,
+)
+
 /** Every episode the session rows carry, falling back to the row date when the episode has none. */
-private fun SimklLibraryEntry.rewatchedEpisodes(): List<RewatchedEpisode> {
+private fun SimklLibraryEntry.rewatchedEpisodeRows(): List<SessionEpisodeRow> {
     val rowWatchedAt = lastWatchedAt?.let(::parseZonedIsoDateTimeToEpochMs)
     return seasons.flatMap { season ->
         val seasonNumber = season.number ?: 0
         season.episodes.mapNotNull { episode ->
             val episodeNumber = episode.number?.takeIf { number -> number > 0 } ?: return@mapNotNull null
-            RewatchedEpisode(
-                seasonNumber = seasonNumber,
-                episodeNumber = episodeNumber,
-                watchedAtEpochMs = episode.watchedAt?.let(::parseZonedIsoDateTimeToEpochMs) ?: rowWatchedAt,
+            SessionEpisodeRow(
+                tvdb = episode.tvdb?.completeOrNull(),
+                rewatched = RewatchedEpisode(
+                    seasonNumber = seasonNumber,
+                    episodeNumber = episodeNumber,
+                    watchedAtEpochMs = episode.watchedAt?.let(::parseZonedIsoDateTimeToEpochMs) ?: rowWatchedAt,
+                ),
             )
         }
     }
 }
+
+/**
+ * The episodes the session holds, in the catalogue's numbering.
+ *
+ * The same rule as the watched projection: the TVDB mapping the read carries (it asks for
+ * `episode_tvdb_id`), else the number the row carries. An anime season listed as its own item numbers
+ * its episodes from 1, and the mapping is what places them in the series' season.
+ */
+internal fun SimklLibraryEntry.catalogueRewatchedEpisodes(): List<RewatchedEpisode> =
+    rewatchedEpisodeRows().map { row ->
+        row.rewatched.copy(
+            seasonNumber = row.tvdb?.season ?: row.rewatched.seasonNumber,
+            episodeNumber = row.tvdb?.episode ?: row.rewatched.episodeNumber,
+        )
+    }
+
+/**
+ * The episodes in the numbering Simkl's session rows use, which is the numbering the writes use:
+ * anime is written flat to its own item. Only the write side reads these.
+ */
+private fun SimklLibraryEntry.rewatchedEpisodes(): List<RewatchedEpisode> =
+    rewatchedEpisodeRows().map(SessionEpisodeRow::rewatched)
 
 /** Keeps one row per episode, dated with the latest time it was rewatched across all sessions. */
 private fun List<RewatchedEpisode>.newestPerEpisode(): List<RewatchedEpisode> =
@@ -293,6 +408,44 @@ internal fun List<SimklLibraryEntry>.rewatchedEpisodesOf(contentId: String): Set
         .toSet()
 
 /**
+ * The episodes the running sessions of a series have covered, in the catalogue's numbering.
+ *
+ * The read side of [rewatchedEpisodesOf]: the detail screen and the run both use the catalogue's
+ * seasons, and one series can hold sessions on several Simkl items (an anime lists each season as
+ * its own). [contentId] is the id a [RewatchRunPosition] carries.
+ */
+internal fun List<SimklLibraryEntry>.rewatchedCatalogueEpisodesOf(contentId: String): Set<Pair<Int, Int>> =
+    runningRewatchSessionsOf(contentId)
+        .flatMap(SimklLibraryEntry::catalogueRewatchedEpisodes)
+        .map { episode -> episode.seasonNumber to episode.episodeNumber }
+        .toSet()
+
+/** The running sessions a run stands for, on every Simkl item of its series. */
+internal fun List<SimklLibraryEntry>.runningRewatchSessionsOf(contentId: String): List<SimklLibraryEntry> =
+    filter { entry ->
+        entry.isRewatch &&
+            entry.isRunningRewatchSession() &&
+            entry.media?.canonicalContentId()?.equals(contentId, ignoreCase = true) == true
+    }
+
+/** The item a session sits on, named by the session's own ids, which include its Simkl id. */
+internal fun SimklLibraryEntry.rewatchSessionMediaReference(): TrackingMediaReference? {
+    val media = media ?: return null
+    val ids = media.toTrackingExternalIds()
+    if (!ids.hasAny) return null
+    return TrackingMediaReference(
+        kind = when (mediaType) {
+            SimklMediaType.ANIME -> TrackingMediaKind.ANIME
+            SimklMediaType.MOVIES -> TrackingMediaKind.MOVIE
+            SimklMediaType.SHOWS -> TrackingMediaKind.SHOW
+        },
+        title = media.title?.takeIf(String::isNotBlank),
+        year = media.year,
+        ids = ids,
+    )
+}
+
+/**
  * Whether the running session of the item holds the episode a mark just wrote.
  *
  * The read-back only uses this to stop waiting; the account's read is adopted either way. The exact
@@ -306,6 +459,17 @@ internal fun List<SimklLibraryEntry>.rewatchSessionHolds(
     season: Int?,
     episode: Int,
 ): Boolean {
+    if (
+        kind == TrackingMediaKind.ANIME &&
+        season != null &&
+        season > 0 &&
+        runningRewatchSessionsOf(contentId).any(SimklLibraryEntry::hasTvdbMapping)
+    ) {
+        // An anime written with the catalogue's season is placed in the catalogue's numbering when
+        // the sessions carry it: the flat number alone would accept the same number from another
+        // season's item and stop waiting before the write is published.
+        return (season to episode) in rewatchedCatalogueEpisodesOf(contentId)
+    }
     val rewatched = rewatchedEpisodesOf(contentId)
     val exactPair = rewatched.contains((season ?: 0) to episode)
     if (exactPair || kind != TrackingMediaKind.ANIME) return exactPair

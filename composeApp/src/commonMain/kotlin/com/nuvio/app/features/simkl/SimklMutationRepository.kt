@@ -291,7 +291,10 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
                 item.copy(
                     media = enriched,
                     isRewatch = true,
-                    rewatchId = snapshot.rewatchSessions.activeRewatchSessionId(enriched),
+                    rewatchId = snapshot.rewatchSessions.activeRewatchSessionId(
+                        enriched,
+                        library = snapshot.entries,
+                    ),
                 )
             } else {
                 item.copy(media = enriched, isRewatch = false, rewatchId = null)
@@ -402,6 +405,7 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
             seasonNumber = episode.season,
             episodeNumber = episode.number,
             animeEpisodeNumber = resolved.episode?.number,
+            library = snapshot.entries,
         ) ?: return null
         val result = service.removeRewatchFromHistory(listOf(resolved), rewatchId)
         if (result.isComplete) {
@@ -427,25 +431,40 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
      */
     suspend fun closeRunningRewatchSession(media: TrackingMediaReference): Boolean {
         val snapshot = SimklSyncRepository.state.value.snapshot
-        val sessionId = snapshot.rewatchSessions.activeRewatchSessionId(media) ?: return false
-        val closed = runCatching {
-            service.closeRewatchSession(media = media, rewatchId = sessionId)
-        }.onFailure { error ->
-            log.w { "Failed to close the Simkl rewatch session: ${error.message}" }
-        }.getOrDefault(false)
-        if (closed) {
+        // Each session is closed on its own Simkl item: the series id can name another season's
+        // item, where the session would not be found. One series can hold a session per item (an
+        // anime lists each season as its own), so all of them are closed.
+        val contentId = media.catalog?.contentId?.takeIf(String::isNotBlank)
+            ?: media.toSimklMedia().canonicalContentId()?.takeIf(String::isNotBlank)
+            ?: return false
+        val sessions = snapshot.rewatchSessions.runningRewatchSessionsOf(contentId)
+            .filter { session -> session.rewatchId != null }
+        if (sessions.isEmpty()) return false
+        var closed = true
+        for (session in sessions) {
+            val rewatchId = session.rewatchId ?: continue
+            val sessionMedia = session.rewatchSessionMediaReference() ?: media
+            val sessionClosed = runCatching {
+                service.closeRewatchSession(media = sessionMedia, rewatchId = rewatchId)
+            }.onFailure { error ->
+                log.w { "Failed to close the Simkl rewatch session: ${error.message}" }
+            }.getOrDefault(false)
+            if (!sessionClosed) {
+                closed = false
+                continue
+            }
             // The account took the close, so the run leaves the row at once: Continue Watching
             // follows the session list and only this object's background read publishes a change,
             // so waiting for that read would keep the card up for the whole settle window (the
             // reads sit 3, 10 and 25 seconds apart). The read below still runs and replaces this
             // with whatever the account reports.
-            SimklSyncRepository.dropRewatchSession(sessionId)
-        }
-        // The sessions are read back in the background: Continue Watching follows the session list,
-        // so the run leaves the row once the read sees the new state.
-        refreshRewatchSessions { sessions ->
-            sessions.none { session ->
-                session.rewatchId == sessionId && session.isRunningRewatchSession()
+            SimklSyncRepository.dropRewatchSession(rewatchId)
+            // The sessions are read back in the background: Continue Watching follows the session
+            // list, so the run leaves the row once the read sees the new state.
+            refreshRewatchSessions { sessionsRead ->
+                sessionsRead.none { sessionEntry ->
+                    sessionEntry.rewatchId == rewatchId && sessionEntry.isRunningRewatchSession()
+                }
             }
         }
         return closed
@@ -466,7 +485,7 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         val snapshot = SimklSyncRepository.state.value.snapshot
         val enriched = snapshot.enrichMediaReference(media)
         val resolved = enriched.resolveAnimeEpisodeForSimkl()
-        if (snapshot.rewatchSessions.activeRewatchSessionId(resolved) != null) {
+        if (snapshot.rewatchSessions.activeRewatchSessionId(resolved, library = snapshot.entries) != null) {
             SimklRewatchConsentRepository.releaseGrant(resolved)
             return
         }
@@ -513,7 +532,10 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
         // The run of the item, when the account already has one, and the answer the user gave to the
         // question before the playback: together they decide whether the scrobble asks Simkl for a
         // rewatch. A session the account runs releases the answer, which was for the run it opened.
-        val runningSessionId = snapshot.rewatchSessions.activeRewatchSessionId(media)
+        val runningSessionId = snapshot.rewatchSessions.activeRewatchSessionId(
+            media,
+            library = snapshot.entries,
+        )
         if (runningSessionId != null) {
             SimklRewatchConsentRepository.releaseGrant(media)
         }

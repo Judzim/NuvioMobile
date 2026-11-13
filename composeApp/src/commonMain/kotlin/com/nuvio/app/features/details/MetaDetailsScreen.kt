@@ -152,7 +152,7 @@ import com.nuvio.app.features.trakt.TraktCommentsSettings
 import com.nuvio.app.features.trakt.TraktConnectionMode
 import com.nuvio.app.features.simkl.RewatchMarkOutcome
 import com.nuvio.app.features.simkl.SimklSyncRepository
-import com.nuvio.app.features.simkl.rewatchedEpisodesOf
+import com.nuvio.app.features.simkl.rewatchedCatalogueEpisodesOf
 import com.nuvio.app.features.tracking.TrackingLibraryTab
 import com.nuvio.app.features.tracking.TrackingMembershipApplyResult
 import com.nuvio.app.features.tracking.toggleTrackingLibraryMembership
@@ -643,7 +643,7 @@ fun MetaDetailsScreen(
                 // and the list draws its marker exactly as it did before rewatches existed.
                 val rewatchEpisodes = remember(rewatchRun, simklSnapshot.rewatchSessions) {
                     rewatchRun
-                        ?.let { run -> simklSnapshot.rewatchSessions.rewatchedEpisodesOf(run.contentId) }
+                        ?.let { run -> simklSnapshot.rewatchSessions.rewatchedCatalogueEpisodesOf(run.contentId) }
                         .orEmpty()
                 }
                 val shuffleSettings = shuffleProfile.settings(meta.id, meta.type)

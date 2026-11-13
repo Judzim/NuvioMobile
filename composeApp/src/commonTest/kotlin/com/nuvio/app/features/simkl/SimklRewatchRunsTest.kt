@@ -500,6 +500,64 @@ class SimklRewatchRunsTest {
         assertFalse(listOf(entry).flatAnimeWriteHolds(mark, episode = 6))
     }
 
+    @Test
+    fun `an anime's seasons form one run in the catalogue numbering`() {
+        val firstSeason = animeSession(simklId = 11L, tvdbSeason = 1)
+        val secondSeason = animeSession(simklId = 12L, tvdbSeason = 2)
+        val sessions = listOf(firstSeason, secondSeason)
+
+        val run = deriveSimklRewatchRuns(
+            entries = sessions,
+            animeIdPreference = DEFAULT_SIMKL_ANIME_ID_PREFERENCE,
+            offerRuns = true,
+        ).single()
+
+        assertEquals(2, run.seasonNumber)
+        assertEquals(1, run.episodeNumber)
+        assertTrue(run.matchKeys.contains("simkl:11"))
+        assertTrue(run.matchKeys.contains("simkl:12"))
+        assertEquals(
+            setOf(1 to 1, 2 to 1),
+            sessions.rewatchedCatalogueEpisodesOf(run.contentId),
+        )
+        assertTrue(
+            sessions.rewatchSessionHolds(
+                contentId = run.contentId,
+                kind = TrackingMediaKind.ANIME,
+                season = 2,
+                episode = 1,
+            ),
+        )
+    }
+
+    private fun animeSession(simklId: Long, tvdbSeason: Int): SimklLibraryEntry = SimklLibraryEntry(
+        mediaType = SimklMediaType.ANIME,
+        show = SimklMedia(
+            title = "Attack on Titan",
+            year = 2013,
+            ids = mapOf(
+                "simkl" to jsonValue("$simklId"),
+                "imdb" to jsonValue("tt2560140"),
+                "mal" to jsonValue("16498"),
+            ),
+        ),
+        seasons = listOf(
+            SimklSeason(
+                number = 1,
+                episodes = listOf(
+                    SimklEpisode(
+                        number = 1,
+                        watchedAt = OLD,
+                        tvdb = SimklEpisodeMapping(tvdbSeason, 1),
+                    ),
+                ),
+            ),
+        ),
+        isRewatch = true,
+        rewatchId = simklId,
+        rewatchStatus = "active",
+    )
+
     private fun snapshotForRun(): SimklSyncSnapshot {
         val sessionRow = rewatchRow(rewatched = listOf(Marked(season = 2, episode = 7)), isRewatch = true)
         return SimklSyncSnapshot(
