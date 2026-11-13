@@ -379,6 +379,7 @@ object SimklSyncRepository : TrackingProfileStore {
     override fun onProfileChanged() {
         // The answers belong to the profile that gave them: a profile switch starts from nothing.
         SimklRewatchConsentRepository.clear()
+        SimklRewatchRunHold.clear()
         profileGeneration += 1L
         hasLoaded = false
         _state.value = SimklSyncUiState()
@@ -386,6 +387,7 @@ object SimklSyncRepository : TrackingProfileStore {
     }
 
     override fun clearLocalState() {
+        SimklRewatchRunHold.clear()
         profileGeneration += 1L
         hasLoaded = false
         _state.value = SimklSyncUiState()

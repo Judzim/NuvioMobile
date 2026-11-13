@@ -6,7 +6,12 @@ import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.simkl.RewatchMarkOutcome
 import com.nuvio.app.features.simkl.SimklMutationRepository
+import com.nuvio.app.features.simkl.SimklRewatchRunHold
+import com.nuvio.app.features.simkl.SimklSyncRepository
+import com.nuvio.app.features.simkl.accountCaughtUpWithOptimisticRun
+import com.nuvio.app.features.simkl.compareRewatchRuns
 import com.nuvio.app.features.simkl.simklRewatchMarkOutcome
+import com.nuvio.app.features.tracking.RewatchRunPosition
 import com.nuvio.app.features.tracking.TrackingHistoryItem
 import com.nuvio.app.features.tracking.buildTrackingMediaReference
 import com.nuvio.app.features.profiles.ProfileRepository
@@ -20,13 +25,16 @@ import com.nuvio.app.features.watched.toWatchedItem
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.CurrentDateProvider
+import com.nuvio.app.features.watchprogress.WatchProgressClock
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watching.domain.isReleasedBy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 object WatchingActions {
     private val actionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -262,6 +270,19 @@ object WatchingActions {
 
     fun markContinueWatchingWatched(item: ContinueWatchingItem) {
         if (!item.canMarkWatched()) return
+        SimklSyncRepository.ensureLoaded()
+        val optimisticRun = optimisticRewatchRunFor(item)
+        if (optimisticRun != null) {
+            SimklRewatchRunHold.hold(optimisticRun)
+            actionScope.launch {
+                withTimeoutOrNull(30_000) {
+                    SimklSyncRepository.state.first { state ->
+                        accountCaughtUpWithOptimisticRun(state.snapshot.rewatchRuns, optimisticRun)
+                    }
+                }
+                SimklRewatchRunHold.releaseIfStill(optimisticRun)
+            }
+        }
         WatchedRepository.markWatched(item.toWatchedItem())
         WatchProgressRepository.clearProgress(
             videoId = item.videoId,
@@ -272,6 +293,46 @@ object WatchingActions {
             MetaDetailsRepository.fetch(type = item.parentMetaType, id = item.parentMetaId)
                 ?.let { meta -> reconcileSeriesWatchedState(meta) }
         }
+    }
+
+    /**
+     * The run position a Continue Watching mark asks for, before the account read sees it.
+     *
+     * Only the card the run itself offered may advance the run. A flat anime session has no season,
+     * so its next step is the next number.
+     */
+    private fun optimisticRewatchRunFor(item: ContinueWatchingItem): RewatchRunPosition? {
+        val accountRun = SimklSyncRepository.state.value.snapshot.rewatchRuns
+            .firstOrNull { candidate -> candidate.matches(item.parentMetaId) } ?: return null
+        val run = SimklRewatchRunHold.runs.value[accountRun.contentId]
+            ?.takeIf { optimistic -> compareRewatchRuns(optimistic, accountRun) >= 0 }
+            ?: accountRun
+        val markedSeason: Int?
+        val markedEpisode: Int?
+        if (item.isNextUp) {
+            if (
+                item.nextUpSeedSeasonNumber != run.seasonNumber ||
+                item.nextUpSeedEpisodeNumber != run.episodeNumber
+            ) {
+                return null
+            }
+            markedSeason = item.seasonNumber
+            markedEpisode = item.episodeNumber
+        } else {
+            markedSeason = item.seasonNumber
+            markedEpisode = item.episodeNumber
+            if (markedSeason == null || markedEpisode == null) return null
+            if (markedSeason != run.seasonNumber) return null
+            if (markedEpisode != run.episodeNumber && markedEpisode != run.episodeNumber + 1) return null
+        }
+        val nextEpisode = markedEpisode ?: return null
+        val advancedSeason = if (run.seasonNumber == 0) 0 else markedSeason ?: run.seasonNumber
+        val advancedEpisode = if (run.seasonNumber == 0) run.episodeNumber + 1 else nextEpisode
+        return run.copy(
+            seasonNumber = advancedSeason,
+            episodeNumber = advancedEpisode,
+            markedAtEpochMs = WatchProgressClock.nowEpochMs(),
+        )
     }
 
     private fun toggleEpisodesWatched(

@@ -58,7 +58,9 @@ import com.nuvio.app.features.home.components.HomeSkeletonHero
 import com.nuvio.app.features.home.components.HomeSkeletonRow
 import com.nuvio.app.features.home.components.HomeContinueWatchingSectionBottomPadding
 import com.nuvio.app.features.home.components.ContinueWatchingLayout
+import com.nuvio.app.features.simkl.SimklRewatchRunHold
 import com.nuvio.app.features.simkl.SimklSyncRepository
+import com.nuvio.app.features.simkl.mergeOptimisticRewatchRuns
 import com.nuvio.app.features.tracking.RewatchRunPosition
 import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tracking.WatchProgressSource
@@ -174,14 +176,10 @@ fun HomeScreen(
         TrackingSettingsRepository.ensureLoaded()
         TrackingSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
-    val simklRewatchRuns = SimklSyncRepository.state.collectAsStateWithLifecycle().value.snapshot.rewatchRuns
-    // A live run of a title outranks a dismissal saved under it: the account says the series is
-    // being rewatched now, so a close that left a key behind must not hide the new card.
-    val effectiveDismissedNextUpKeys = remember(
-        continueWatchingPreferences.dismissedNextUpKeys,
-        simklRewatchRuns,
-    ) {
-        continueWatchingPreferences.dismissedNextUpKeys.withoutLiveRewatchDismissals(simklRewatchRuns)
+    val accountRewatchRuns = SimklSyncRepository.state.collectAsStateWithLifecycle().value.snapshot.rewatchRuns
+    val optimisticRewatchRuns by SimklRewatchRunHold.runs.collectAsStateWithLifecycle()
+    val simklRewatchRuns = remember(accountRewatchRuns, optimisticRewatchRuns) {
+        mergeOptimisticRewatchRuns(accountRewatchRuns, optimisticRewatchRuns)
     }
     var observedOfflineState by remember { mutableStateOf(false) }
 
@@ -267,6 +265,13 @@ fun HomeScreen(
             },
             simklRewatchRuns = simklRewatchRuns,
         )
+    }
+
+    val effectiveDismissedNextUpKeys = remember(
+        continueWatchingPreferences.dismissedNextUpKeys,
+        simklRewatchRuns,
+    ) {
+        continueWatchingPreferences.dismissedNextUpKeys.withoutLiveRewatchDismissals(simklRewatchRuns)
     }
 
     val recentNextUpSeedCandidates = remember(
