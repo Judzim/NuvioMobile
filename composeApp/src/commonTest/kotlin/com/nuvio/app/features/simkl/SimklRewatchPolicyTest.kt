@@ -254,6 +254,53 @@ class SimklRewatchPolicyTest {
         assertTrue(isSimklRewatchModeSelectable(SimklRewatchMode.AUTOMATIC, "vip"))
     }
 
+    @Test
+    fun `an unknown plan is read before a sync only while rewatches are on`() {
+        assertTrue(
+            shouldLoadSimklPlanForRewatches(
+                mode = SimklRewatchMode.AUTOMATIC,
+                isAuthenticated = true,
+                accountType = null,
+            ),
+        )
+        assertTrue(
+            shouldLoadSimklPlanForRewatches(
+                mode = SimklRewatchMode.SEMI_AUTOMATIC,
+                isAuthenticated = true,
+                accountType = null,
+            ),
+        )
+        assertFalse(
+            shouldLoadSimklPlanForRewatches(
+                mode = SimklRewatchMode.OFF,
+                isAuthenticated = true,
+                accountType = null,
+            ),
+        )
+        assertFalse(
+            shouldLoadSimklPlanForRewatches(
+                mode = SimklRewatchMode.AUTOMATIC,
+                isAuthenticated = false,
+                accountType = null,
+            ),
+        )
+        // A known plan, free included, is left to the settings refresh.
+        assertFalse(
+            shouldLoadSimklPlanForRewatches(
+                mode = SimklRewatchMode.AUTOMATIC,
+                isAuthenticated = true,
+                accountType = "free",
+            ),
+        )
+        assertFalse(
+            shouldLoadSimklPlanForRewatches(
+                mode = SimklRewatchMode.AUTOMATIC,
+                isAuthenticated = true,
+                accountType = "vip",
+            ),
+        )
+    }
+
     private fun record(
         mode: SimklRewatchMode,
         accountType: String?,
