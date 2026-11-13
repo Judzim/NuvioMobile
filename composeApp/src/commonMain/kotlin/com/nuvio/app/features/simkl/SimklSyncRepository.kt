@@ -328,26 +328,28 @@ object SimklSyncRepository : TrackingProfileStore {
      */
     internal suspend fun refreshRewatchRuns() {
         ensureLoaded()
-        val sessions = _state.value.snapshot.rewatchSessions
-        if (sessions.isEmpty()) return
-        val settings = TrackingSettingsRepository.uiState.value
-        val runs = runCatching {
-            deriveSimklRewatchRuns(
-                entries = sessions,
-                animeIdPreference = settings.simklAnimeIdPreference,
-                offerRuns = settings.simklRewatchMode != SimklRewatchMode.OFF,
-            )
-        }.getOrElse { error ->
-            log.w { "Could not re-derive the runs after a setting change: ${error.message}" }
-            return
-        }
         val generation = profileGeneration
         val profileId = ProfileRepository.activeProfileId
+        // The sessions are read and the runs derived inside the lock, against the snapshot the
+        // result replaces: a sync that lands in between must not be overwritten by an older read.
         snapshotMutex.withLock {
             if (generation != profileGeneration || profileId != ProfileRepository.activeProfileId) {
                 return@withLock
             }
             val current = _state.value
+            val sessions = current.snapshot.rewatchSessions
+            if (sessions.isEmpty()) return@withLock
+            val settings = TrackingSettingsRepository.uiState.value
+            val runs = runCatching {
+                deriveSimklRewatchRuns(
+                    entries = sessions,
+                    animeIdPreference = settings.simklAnimeIdPreference,
+                    offerRuns = settings.simklRewatchMode != SimklRewatchMode.OFF,
+                )
+            }.getOrElse { error ->
+                log.w { "Could not re-derive the runs after a setting change: ${error.message}" }
+                return@withLock
+            }
             if (current.snapshot.rewatchRuns == runs) return@withLock
             val snapshot = current.snapshot.copy(rewatchRuns = runs)
             SimklSyncStorage.savePayload(json.encodeToString(snapshot))
