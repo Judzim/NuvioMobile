@@ -152,6 +152,7 @@ internal fun MetaDetails.seriesPrimaryAction(
     allowRewatch: Boolean = false,
     rewatchSeasonNumber: Int? = null,
     rewatchEpisodeNumber: Int? = null,
+    rewatchMarkedAtEpochMs: Long = 0L,
 ): SeriesPrimaryAction? {
     val content = WatchingContentRef(type = type, id = id)
     val effectiveWatchedItems = buildList {
@@ -179,6 +180,7 @@ internal fun MetaDetails.seriesPrimaryAction(
         allowRewatch = allowRewatch,
         rewatchSeasonNumber = rewatchSeasonNumber,
         rewatchEpisodeNumber = rewatchEpisodeNumber,
+        rewatchMarkedAtEpochMs = rewatchMarkedAtEpochMs,
     )
 }
 
@@ -192,6 +194,7 @@ internal fun MetaDetails.seriesPrimaryAction(
     allowRewatch: Boolean = false,
     rewatchSeasonNumber: Int? = null,
     rewatchEpisodeNumber: Int? = null,
+    rewatchMarkedAtEpochMs: Long = 0L,
 ): SeriesPrimaryAction? =
     decideSeriesPrimaryAction(
         content = content,
@@ -208,6 +211,7 @@ internal fun MetaDetails.seriesPrimaryAction(
         allowRewatch = allowRewatch,
         rewatchSeasonNumber = rewatchSeasonNumber,
         rewatchEpisodeNumber = rewatchEpisodeNumber,
+        rewatchMarkedAtEpochMs = rewatchMarkedAtEpochMs,
     )?.toLegacySeriesPrimaryAction()
 
 internal fun MetaVideo.playLabel(): String =

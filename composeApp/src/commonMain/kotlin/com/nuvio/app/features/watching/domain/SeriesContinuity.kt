@@ -116,6 +116,43 @@ fun nextReleasedEpisodeAfter(
     return candidates.firstOrNull { normalizeSeasonNumber(it.seasonNumber) > 0 }
 }
 
+/** What the detail Play action does with an open run. */
+internal enum class RewatchPlayAction {
+    KEEP,
+    ADVANCE,
+    REJECT,
+}
+
+/**
+ * What the detail Play action does with an open run, read from the latest completed mark.
+ *
+ * The latest completed canonical mark is the last viewing the user made. When it is newer than the
+ * run and sits on the run's own next step, the run advances to that step: the local mark is the
+ * rewatch the user just made, and Play must offer the episode after it. A mark past that step is a
+ * watch that moved beyond the run, so the run stops deciding. A mark inside the run, an older mark,
+ * or a run with no date leaves the run in place.
+ */
+internal fun rewatchPlayActionFor(
+    runMarkedAtEpochMs: Long,
+    expectedNextSeason: Int?,
+    expectedNextEpisode: Int?,
+    latestMarkSeason: Int?,
+    latestMarkEpisode: Int?,
+    latestMarkedAtEpochMs: Long,
+): RewatchPlayAction {
+    val nextSeason = expectedNextSeason ?: return RewatchPlayAction.REJECT
+    val nextEpisode = expectedNextEpisode ?: return RewatchPlayAction.REJECT
+    val markSeason = latestMarkSeason ?: return RewatchPlayAction.KEEP
+    val markEpisode = latestMarkEpisode ?: return RewatchPlayAction.KEEP
+    if (runMarkedAtEpochMs <= 0L) return RewatchPlayAction.KEEP
+    if (latestMarkedAtEpochMs <= runMarkedAtEpochMs) return RewatchPlayAction.KEEP
+    val pastTheStep = markSeason > nextSeason ||
+        (markSeason == nextSeason && markEpisode > nextEpisode)
+    if (pastTheStep) return RewatchPlayAction.REJECT
+    val onTheStep = markSeason == nextSeason && markEpisode == nextEpisode
+    return if (onTheStep) RewatchPlayAction.ADVANCE else RewatchPlayAction.KEEP
+}
+
 fun decideSeriesPrimaryAction(
     content: WatchingContentRef,
     episodes: List<WatchingReleasedEpisode>,
@@ -128,6 +165,7 @@ fun decideSeriesPrimaryAction(
     allowRewatch: Boolean = false,
     rewatchSeasonNumber: Int? = null,
     rewatchEpisodeNumber: Int? = null,
+    rewatchMarkedAtEpochMs: Long = 0L,
 ): WatchingSeriesPrimaryAction? {
     val resumeRecord = resumeProgressForSeries(
         content = content,
@@ -142,9 +180,10 @@ fun decideSeriesPrimaryAction(
 
     // A rewatch the user is following from its Continue Watching card decides where Play goes: the
     // run is at that episode, so the next step of the run is the right offer even though the series
-    // was watched to the end long ago.
+    // was watched to the end long ago. The canonical watch can move past an open run, though, and
+    // then the run must stop deciding until its own next step is the newest mark.
     if (rewatchSeasonNumber != null && rewatchEpisodeNumber != null) {
-        val runEpisode = nextReleasedEpisodeAfter(
+        val expectedNext = nextReleasedEpisodeAfter(
             content = content,
             episodes = episodes,
             seasonNumber = rewatchSeasonNumber,
@@ -152,6 +191,33 @@ fun decideSeriesPrimaryAction(
             todayIsoDate = todayIsoDate,
             showUnairedNextUp = showUnairedNextUp,
         )
+        val latestMark = latestCompletedCanonicalMark(
+            content = content,
+            progressRecords = progressRecords,
+            watchedRecords = watchedRecords,
+        )
+        val action = rewatchPlayActionFor(
+            runMarkedAtEpochMs = rewatchMarkedAtEpochMs,
+            expectedNextSeason = expectedNext?.seasonNumber,
+            expectedNextEpisode = expectedNext?.episodeNumber,
+            latestMarkSeason = latestMark?.seasonNumber,
+            latestMarkEpisode = latestMark?.episodeNumber,
+            latestMarkedAtEpochMs = latestMark?.markedAtEpochMs ?: 0L,
+        )
+        val runEpisode = when (action) {
+            RewatchPlayAction.KEEP -> expectedNext
+            RewatchPlayAction.ADVANCE -> expectedNext?.let { next ->
+                nextReleasedEpisodeAfter(
+                    content = content,
+                    episodes = episodes,
+                    seasonNumber = next.seasonNumber,
+                    episodeNumber = next.episodeNumber,
+                    todayIsoDate = todayIsoDate,
+                    showUnairedNextUp = showUnairedNextUp,
+                )
+            }
+            RewatchPlayAction.REJECT -> null
+        }
         if (runEpisode != null) {
             val runProgress = progressRecords.firstOrNull { record ->
                 record.content.matchesWatchingContent(content) &&

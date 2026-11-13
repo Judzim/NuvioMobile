@@ -201,42 +201,61 @@ fun latestCompletedSeriesEpisode(
             { it.episodeNumber },
         )
     }
-    val allMarkers = buildList {
-        progressRecords
-            .asSequence()
-            .filter { record ->
-                record.content == content &&
-                    record.isCompleted &&
-                    record.seasonNumber != null &&
-                    record.episodeNumber != null
-            }
-            .mapNotNullTo(this) { record ->
-                val seasonNumber = record.seasonNumber ?: return@mapNotNullTo null
-                val episodeNumber = record.episodeNumber ?: return@mapNotNullTo null
-                WatchingCompletedEpisode(
-                    seasonNumber = seasonNumber,
-                    episodeNumber = episodeNumber,
-                    markedAtEpochMs = record.lastUpdatedEpochMs,
-                )
-            }
-        watchedRecords
-            .asSequence()
-            .filter { record ->
-                record.content == content &&
-                    record.seasonNumber != null &&
-                    record.episodeNumber != null
-            }
-            .mapNotNullTo(this) { record ->
-                val seasonNumber = record.seasonNumber ?: return@mapNotNullTo null
-                val episodeNumber = record.episodeNumber ?: return@mapNotNullTo null
-                WatchingCompletedEpisode(
-                    seasonNumber = seasonNumber,
-                    episodeNumber = episodeNumber,
-                    markedAtEpochMs = record.markedAtEpochMs,
-                )
-            }
-    }
-    return allMarkers.maxWithOrNull(ordering)
+    return completedSeriesMarks(content, progressRecords, watchedRecords).maxWithOrNull(ordering)
+}
+
+/**
+ * The last completed canonical mark, by time, or null when there is none.
+ *
+ * A mark inside an open rewatch run and a mark past it both carry the time of the viewing, so the
+ * newest mark is what tells the run where the user is now. The position alone cannot: the run's own
+ * next episode marked locally is newer than the run and sits exactly on its next step.
+ */
+internal fun latestCompletedCanonicalMark(
+    content: WatchingContentRef,
+    progressRecords: List<WatchingProgressRecord>,
+    watchedRecords: List<WatchingWatchedRecord>,
+): WatchingCompletedEpisode? =
+    completedSeriesMarks(content, progressRecords, watchedRecords).maxByOrNull { mark -> mark.markedAtEpochMs }
+
+private fun completedSeriesMarks(
+    content: WatchingContentRef,
+    progressRecords: List<WatchingProgressRecord>,
+    watchedRecords: List<WatchingWatchedRecord>,
+): List<WatchingCompletedEpisode> = buildList {
+    progressRecords
+        .asSequence()
+        .filter { record ->
+            record.content == content &&
+                record.isCompleted &&
+                record.seasonNumber != null &&
+                record.episodeNumber != null
+        }
+        .mapNotNullTo(this) { record ->
+            val seasonNumber = record.seasonNumber ?: return@mapNotNullTo null
+            val episodeNumber = record.episodeNumber ?: return@mapNotNullTo null
+            WatchingCompletedEpisode(
+                seasonNumber = seasonNumber,
+                episodeNumber = episodeNumber,
+                markedAtEpochMs = record.lastUpdatedEpochMs,
+            )
+        }
+    watchedRecords
+        .asSequence()
+        .filter { record ->
+            record.content == content &&
+                record.seasonNumber != null &&
+                record.episodeNumber != null
+        }
+        .mapNotNullTo(this) { record ->
+            val seasonNumber = record.seasonNumber ?: return@mapNotNullTo null
+            val episodeNumber = record.episodeNumber ?: return@mapNotNullTo null
+            WatchingCompletedEpisode(
+                seasonNumber = seasonNumber,
+                episodeNumber = episodeNumber,
+                markedAtEpochMs = record.markedAtEpochMs,
+            )
+        }
 }
 
 fun normalizeSeasonNumber(seasonNumber: Int?): Int = seasonNumber?.coerceAtLeast(0) ?: 0

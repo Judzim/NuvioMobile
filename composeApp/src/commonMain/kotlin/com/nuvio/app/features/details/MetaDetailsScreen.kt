@@ -679,6 +679,7 @@ fun MetaDetailsScreen(
                             allowRewatch = true,
                             rewatchSeasonNumber = rewatchRun?.seasonNumber,
                             rewatchEpisodeNumber = rewatchRun?.episodeNumber,
+                            rewatchMarkedAtEpochMs = rewatchRun?.markedAtEpochMs ?: 0L,
                         )
                     }
                 }

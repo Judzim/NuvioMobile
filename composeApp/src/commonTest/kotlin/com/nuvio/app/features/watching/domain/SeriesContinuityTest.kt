@@ -440,4 +440,122 @@ class SeriesContinuityTest {
         assertEquals("Next Up • S2 E2", action.label)
         assertEquals("show:2:2", action.videoId)
     }
+
+    @Test
+    fun rewatch_play_action_keeps_a_run_whose_step_is_still_ahead() {
+        assertEquals(
+            RewatchPlayAction.KEEP,
+            rewatchPlayActionFor(
+                runMarkedAtEpochMs = 2_000L,
+                expectedNextSeason = 1,
+                expectedNextEpisode = 8,
+                latestMarkSeason = 1,
+                latestMarkEpisode = 5,
+                latestMarkedAtEpochMs = 3_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun rewatch_play_action_advances_when_the_run_step_is_the_newest_mark() {
+        assertEquals(
+            RewatchPlayAction.ADVANCE,
+            rewatchPlayActionFor(
+                runMarkedAtEpochMs = 2_000L,
+                expectedNextSeason = 1,
+                expectedNextEpisode = 8,
+                latestMarkSeason = 1,
+                latestMarkEpisode = 8,
+                latestMarkedAtEpochMs = 3_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun rewatch_play_action_rejects_a_run_the_watch_moved_past() {
+        assertEquals(
+            RewatchPlayAction.REJECT,
+            rewatchPlayActionFor(
+                runMarkedAtEpochMs = 2_000L,
+                expectedNextSeason = 1,
+                expectedNextEpisode = 8,
+                latestMarkSeason = 1,
+                latestMarkEpisode = 9,
+                latestMarkedAtEpochMs = 3_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun rewatch_play_action_keeps_an_old_mark_out_of_the_run() {
+        assertEquals(
+            RewatchPlayAction.KEEP,
+            rewatchPlayActionFor(
+                runMarkedAtEpochMs = 2_000L,
+                expectedNextSeason = 1,
+                expectedNextEpisode = 8,
+                latestMarkSeason = 1,
+                latestMarkEpisode = 9,
+                latestMarkedAtEpochMs = 1_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun decideSeriesPrimaryAction_keeps_an_older_run_out_of_play() {
+        val action = decideSeriesPrimaryAction(
+            content = show,
+            episodes = tenEpisodes(),
+            progressRecords = emptyList(),
+            watchedRecords = listOf(
+                WatchingWatchedRecord(
+                    content = show,
+                    seasonNumber = 1,
+                    episodeNumber = 9,
+                    markedAtEpochMs = 3_000L,
+                ),
+            ),
+            todayIsoDate = "2026-03-30",
+            rewatchSeasonNumber = 1,
+            rewatchEpisodeNumber = 7,
+            rewatchMarkedAtEpochMs = 2_000L,
+        )
+
+        assertNotNull(action)
+        assertEquals("ep10", action.videoId)
+    }
+
+    @Test
+    fun decideSeriesPrimaryAction_advances_the_run_when_its_next_episode_is_marked() {
+        val action = decideSeriesPrimaryAction(
+            content = show,
+            episodes = tenEpisodes(),
+            progressRecords = emptyList(),
+            watchedRecords = listOf(
+                WatchingWatchedRecord(
+                    content = show,
+                    seasonNumber = 1,
+                    episodeNumber = 8,
+                    markedAtEpochMs = 3_000L,
+                ),
+            ),
+            todayIsoDate = "2026-03-30",
+            rewatchSeasonNumber = 1,
+            rewatchEpisodeNumber = 7,
+            rewatchMarkedAtEpochMs = 2_000L,
+        )
+
+        assertNotNull(action)
+        assertEquals("ep9", action.videoId)
+    }
+
+    private fun tenEpisodes(): List<WatchingReleasedEpisode> = (1..10).map { number ->
+        WatchingReleasedEpisode(
+            videoId = "ep$number",
+            seasonNumber = 1,
+            episodeNumber = number,
+            title = "Episode $number",
+            releasedDate = "2026-01-01",
+        )
+    }
 }
