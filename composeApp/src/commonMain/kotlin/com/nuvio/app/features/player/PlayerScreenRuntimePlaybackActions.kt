@@ -278,7 +278,12 @@ internal fun PlayerScreenRuntime.emitTrackingScrobbleStart() {
     // The first start of this stretch fixes where it began; later progress updates must not move it.
     scrobbleStartProgressPercent = currentProgress.toDouble()
     // A new session is a new viewing: the completion latch of the run that ended before this one
-    // must not suppress this run's own end.
+    // must not suppress this run's own end. A completion stop the previous stretch reported does not
+    // belong to the session this start opens, so a new id keeps the tracker's collapse rule from
+    // dropping the stop that ends it.
+    if (hasSentCompletionScrobbleForCurrentItem) {
+        scrobblePlaybackId = nextScrobblePlaybackId()
+    }
     hasSentCompletionScrobbleForCurrentItem = false
     hasRequestedScrobbleStartForCurrentItem = true
     val requestGeneration = scrobbleStartRequestGeneration + 1L
