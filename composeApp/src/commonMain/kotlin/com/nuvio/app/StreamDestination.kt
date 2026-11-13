@@ -89,23 +89,27 @@ internal fun StreamDestination(
         }
         return
     }
-    // Asked as soon as the stream screen opens, before any stream resolves, so the question is on
-    // screen while the streams load instead of after the player already has a link. The playback
-    // paths below still wait for the answer before they open a player.
-    LaunchedEffect(route.launchId) {
-        prepareTrackingQuestion(
-            contentType = launch.type,
-            parentMetaId = launch.parentMetaId ?: launch.videoId,
-            videoId = launch.videoId,
-            seasonNumber = launch.seasonNumber,
-            episodeNumber = launch.episodeNumber,
-            title = launch.title,
-            episodeTitle = launch.episodeTitle,
-            progressPercent = launch.resumeProgressFraction?.let { it * 100.0 },
-        )
-    }
     val pauseDescription = launch.pauseDescription
     val streamRouteScope = rememberCoroutineScope()
+
+    // The rewatch question is raised when a stream is picked, at the same point the P2P notice is,
+    // never at the stream screen opening and never after the stream has been prepared and opened.
+    // The player paths below still wait for the answer before they start anything.
+    fun askRewatchQuestion() {
+        streamRouteScope.launch {
+            prepareTrackingQuestion(
+                contentType = launch.type,
+                parentMetaId = launch.parentMetaId ?: launch.videoId,
+                videoId = launch.videoId,
+                seasonNumber = launch.seasonNumber,
+                episodeNumber = launch.episodeNumber,
+                title = launch.title,
+                episodeTitle = launch.episodeTitle,
+                progressPercent = launch.resumeProgressFraction?.let { it * 100.0 },
+            )
+        }
+    }
+
     var autoPlayNavigationStarted by remember(route.launchId) { mutableStateOf(false) }
     var resolvingDebridStream by rememberSaveable(route.launchId) { mutableStateOf(false) }
     var resolvingYouTubeStream by rememberSaveable(route.launchId) { mutableStateOf(false) }
@@ -462,6 +466,8 @@ internal fun StreamDestination(
         if (autoPlayHandled) return@LaunchedEffect
         if (streamsUiState.requestToken != expectedStreamsRequestToken) return@LaunchedEffect
         val selectedStream = streamsUiState.autoPlayStream ?: return@LaunchedEffect
+        // Auto-play picked a stream, which is this flow's selection point: ask now, then prepare.
+        askRewatchQuestion()
         val stream = if (selectedStream.needsServerPreparation) {
             StreamsRepository.setOverlayVisible(true, getString(Res.string.player_loading_preparing))
             runCatching { ServerPlayback.prepare(selectedStream) }
@@ -628,6 +634,9 @@ internal fun StreamDestination(
         forceInternal: Boolean,
         saveForReuse: Boolean = true,
     ) {
+        // Same point as the P2P notice: the stream was picked, the player has not started yet.
+        // A link that opens in a browser is not a tracked playback, so it is left alone.
+        if (!stream.shouldOpenExternally) askRewatchQuestion()
         if (stream.needsServerPreparation) {
             if (preparingServerStream) return
             streamRouteScope.launch {
