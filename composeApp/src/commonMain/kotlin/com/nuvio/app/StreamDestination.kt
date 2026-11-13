@@ -95,6 +95,12 @@ internal fun StreamDestination(
     // The rewatch question is raised when a stream is picked, at the same point the P2P notice is,
     // never at the stream screen opening and never after the stream has been prepared and opened.
     // The player paths below still wait for the answer before they start anything.
+    fun showsP2pConsent(stream: StreamItem): Boolean =
+        stream.needsLocalDebridResolve &&
+            stream.p2pInfoHash != null &&
+            P2pSettingsRepository.isVisible &&
+            !p2pEnabled
+
     fun askRewatchQuestion() {
         streamRouteScope.launch {
             prepareTrackingQuestion(
@@ -467,7 +473,8 @@ internal fun StreamDestination(
         if (streamsUiState.requestToken != expectedStreamsRequestToken) return@LaunchedEffect
         val selectedStream = streamsUiState.autoPlayStream ?: return@LaunchedEffect
         // Auto-play picked a stream, which is this flow's selection point: ask now, then prepare.
-        askRewatchQuestion()
+        // A stream that first shows the P2P consent asks after that consent, before it opens.
+        if (!showsP2pConsent(selectedStream)) askRewatchQuestion()
         val stream = if (selectedStream.needsServerPreparation) {
             StreamsRepository.setOverlayVisible(true, getString(Res.string.player_loading_preparing))
             runCatching { ServerPlayback.prepare(selectedStream) }
@@ -635,8 +642,9 @@ internal fun StreamDestination(
         saveForReuse: Boolean = true,
     ) {
         // Same point as the P2P notice: the stream was picked, the player has not started yet.
-        // A link that opens in a browser is not a tracked playback, so it is left alone.
-        if (!stream.shouldOpenExternally) askRewatchQuestion()
+        // A link that opens in a browser is not a tracked playback, and a P2P stream asks after its
+        // own consent, so neither raises the question here.
+        if (!stream.shouldOpenExternally && !showsP2pConsent(stream)) askRewatchQuestion()
         if (stream.needsServerPreparation) {
             if (preparingServerStream) return
             streamRouteScope.launch {
