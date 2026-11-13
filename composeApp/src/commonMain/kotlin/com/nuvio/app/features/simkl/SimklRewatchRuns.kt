@@ -286,7 +286,7 @@ internal fun List<SimklLibraryEntry>.rewatchedEpisodesOf(contentId: String): Set
     filter { entry ->
         entry.isRewatch &&
             entry.isRunningRewatchSession() &&
-            entry.media?.canonicalContentId() == contentId
+            entry.media?.canonicalContentId()?.equals(contentId, ignoreCase = true) == true
     }
         .flatMap(SimklLibraryEntry::rewatchedEpisodes)
         .map { episode -> episode.seasonNumber to episode.episodeNumber }

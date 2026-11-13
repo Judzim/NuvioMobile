@@ -387,6 +387,45 @@ class SimklMutationRepositoryTest {
         assertNull(plain["rewatch_id"])
     }
 
+    @Test
+    fun `a mixed show batch carries no rewatch flag or session`() {
+        val mixed = buildSimklHistoryMutationBody(
+            listOf(
+                TrackingHistoryItem(
+                    show(TrackingEpisode(season = 1, number = 1)),
+                    isRewatch = true,
+                    rewatchId = 4321L,
+                ),
+                TrackingHistoryItem(show(TrackingEpisode(season = 1, number = 2))),
+            ),
+        ).asObject().getValue("shows").jsonArray.single().jsonObject
+
+        assertNull(mixed["is_rewatch"])
+        assertNull(mixed["rewatch_id"])
+        assertEquals(
+            2,
+            mixed.getValue("seasons").jsonArray.single().jsonObject
+                .getValue("episodes").jsonArray.size,
+        )
+    }
+
+    @Test
+    fun `a mixed show batch is read back as first watches`() {
+        val writes = simklHistoryWrites(
+            listOf(
+                TrackingHistoryItem(
+                    show(TrackingEpisode(season = 1, number = 1)),
+                    isRewatch = true,
+                    rewatchId = 4321L,
+                ),
+                TrackingHistoryItem(show(TrackingEpisode(season = 1, number = 2))),
+            ),
+        )
+
+        assertTrue(writes.none(TrackingHistoryItem::isRewatch))
+        assertTrue(writes.all { item -> item.rewatchId == null })
+    }
+
     private fun movie() = TrackingMediaReference(
         kind = TrackingMediaKind.MOVIE,
         title = "Terminator 3: Rise of the Machines",

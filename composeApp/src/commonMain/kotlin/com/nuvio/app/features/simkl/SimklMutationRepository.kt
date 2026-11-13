@@ -297,11 +297,15 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
                 item.copy(media = enriched, isRewatch = false, rewatchId = null)
             }
         }
-        val result = service.addToHistory(resolved)
+        // One show entry can carry only one flag, and a batch that mixes a repeat with a first watch
+        // is sent as first watches by the body. Make the same choice here, so the read-back only
+        // starts for a write that really was a rewatch.
+        val writes = simklHistoryWrites(resolved)
+        val result = service.addToHistory(writes)
         // The run this mark opened or extended is not in the snapshot until a read sees it. Read it
         // back in the background and adopt the derived runs; a failure must not turn a recorded mark
         // into an error. A settlement predicate keeps the read going until the episode shows up.
-        val target = resolved.firstOrNull { item -> item.isRewatch }?.media
+        val target = writes.firstOrNull { item -> item.isRewatch }?.media
         val targetContentId = target?.catalog?.contentId?.takeIf(String::isNotBlank)
         val targetSeason = target?.episode?.season
         val targetEpisode = target?.episode?.number
@@ -570,6 +574,22 @@ object SimklMutationRepository : TrackingListWriter, TrackingHistoryWriter, Trac
     private val log = Logger.withTag("SimklMutation")
 }
 
+/**
+ * The items a history write sends, with one flag per show entry.
+ *
+ * A show entry carries one `is_rewatch` for all of its episodes, and the body sends a mixed group as
+ * first watches. The caller has to make the same choice, or the read-back starts for a write that
+ * never booked a rewatch. A group that agrees keeps its flag and its session.
+ */
+internal fun simklHistoryWrites(items: List<TrackingHistoryItem>): List<TrackingHistoryItem> =
+    items.groupBy { item -> item.media.stableKey }.values.flatMap { group ->
+        if (group.all(TrackingHistoryItem::isRewatch) || group.none(TrackingHistoryItem::isRewatch)) {
+            group
+        } else {
+            group.map { item -> item.copy(isRewatch = false, rewatchId = null) }
+        }
+    }
+
 internal fun buildSimklListMutationBody(
     items: Collection<TrackingMediaReference>,
     destination: TrackingListStatus,
@@ -709,11 +729,18 @@ private fun buildShowHistoryItem(
 ): SimklHistoryItemDto {
     val first = items.first()
     val parentMutation = items.lastOrNull { item -> item.media.episode == null }
-    // The session and the flag travel on the item itself: a mark that is a repeat viewing names the
-    // run it joins, and a caller that marks the whole request marks every item of it.
-    val mutation = parentMutation ?: first
-    val rewatchId = mutation.rewatchId
-    val isRewatch = mutation.isRewatch || requestRewatch
+    // The session the write belongs to is carried by the show entry, not by the episode: Simkl
+    // documents it as a field of the movie or show entry, and so is the flag. One show entry can
+    // carry only one answer, so a batch that mixes a repeat with a first watch travels as first
+    // watches: the account already holds the repeats, while a plain add of one is dropped, and a
+    // rewatch of a genuinely new episode would join the run.
+    val isRewatch = requestRewatch || items.all(TrackingHistoryItem::isRewatch)
+    // Only a group that agrees on its session may name one. A removal says `isRewatch = false` but
+    // still needs its id, which is why the id is not tied to the flag.
+    val rewatchId = items.mapNotNull(TrackingHistoryItem::rewatchId)
+        .distinct()
+        .singleOrNull()
+        ?.takeIf { isRewatch || !includeWatchedAt }
     if (parentMutation != null) {
         return parentMutation.media.toHistoryItemDto(
             watchedAtEpochMs = parentMutation.watchedAtEpochMs.takeIf { includeWatchedAt },
