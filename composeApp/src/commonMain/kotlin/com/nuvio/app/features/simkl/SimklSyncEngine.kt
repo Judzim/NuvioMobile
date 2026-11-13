@@ -166,10 +166,13 @@ internal class SimklSyncEngine(
             )
         }.getOrElse { error ->
             log.w { "Simkl rewatch sessions could not be read: ${error.message}" }
+            // The window the read failed on was never read, and the sync still advances the
+            // watermark, so the flag has to force one cold read instead of letting the next delta
+            // skip that window for good.
             SimklRewatchRead(
                 runs = current?.rewatchRuns.orEmpty(),
                 sessions = current?.rewatchSessions.orEmpty(),
-                complete = current?.rewatchSessionsComplete ?: false,
+                complete = false,
             )
         }
     }
