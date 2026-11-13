@@ -267,11 +267,22 @@ fun HomeScreen(
         )
     }
 
+    // A live run of a title outranks a dismissal saved under it only when the run decides the card.
+    // An older run leaves the canonical card in place, and the dismissal of that card holds.
+    val leadingRewatchRuns = remember(simklRewatchRuns, allNextUpSeedCandidates) {
+        simklRewatchRuns.filter { run ->
+            allNextUpSeedCandidates.any { candidate ->
+                run.matches(candidate.content.id) &&
+                    candidate.seasonNumber == run.seasonNumber &&
+                    candidate.episodeNumber == run.episodeNumber
+            }
+        }
+    }
     val effectiveDismissedNextUpKeys = remember(
         continueWatchingPreferences.dismissedNextUpKeys,
-        simklRewatchRuns,
+        leadingRewatchRuns,
     ) {
-        continueWatchingPreferences.dismissedNextUpKeys.withoutLiveRewatchDismissals(simklRewatchRuns)
+        continueWatchingPreferences.dismissedNextUpKeys.withoutLiveRewatchDismissals(leadingRewatchRuns)
     }
 
     val recentNextUpSeedCandidates = remember(

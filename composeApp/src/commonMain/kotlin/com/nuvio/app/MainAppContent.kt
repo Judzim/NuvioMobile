@@ -50,10 +50,12 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
+import com.nuvio.app.features.simkl.SimklRewatchRunHold
 import com.nuvio.app.features.simkl.SimklSyncRepository
 import com.nuvio.app.features.simkl.SimklMutationRepository
-import com.nuvio.app.features.simkl.activeRewatchSessionId
+import com.nuvio.app.features.simkl.isRewatchRunCard
 import com.nuvio.app.features.simkl.mediaReference
+import com.nuvio.app.features.simkl.mergeOptimisticRewatchRuns
 import com.nuvio.app.core.ui.LocalPosterClickAnchor
 import com.nuvio.app.core.ui.LocalVerticalBarPadding
 import com.nuvio.app.navigation.PosterNavigationState
@@ -1300,9 +1302,22 @@ internal fun MainAppContent(
             continueWatchingDisintegrationRequests.arm(continueWatchingItemKey(item))
             // A card of a run the account is in is dropped by closing the session: that takes it out
             // of the row on every device and keeps the watch history, which a local key cannot do.
-            val run = if (item.isNextUp) {
-                SimklSyncRepository.state.value.snapshot.rewatchRuns
-                    .firstOrNull { run -> run.matches(item.parentMetaId) }
+            // Only the run's own card may close it: a canonical card of a series with an older run
+            // is dismissed like any other Next Up card.
+            val rowRuns = mergeOptimisticRewatchRuns(
+                SimklSyncRepository.state.value.snapshot.rewatchRuns,
+                SimklRewatchRunHold.runs.value,
+            )
+            val run = if (
+                item.isNextUp &&
+                isRewatchRunCard(
+                    runs = rowRuns,
+                    contentId = item.parentMetaId,
+                    seedSeason = item.nextUpSeedSeasonNumber,
+                    seedEpisode = item.nextUpSeedEpisodeNumber,
+                )
+            ) {
+                rowRuns.firstOrNull { run -> run.matches(item.parentMetaId) }
             } else {
                 null
             }

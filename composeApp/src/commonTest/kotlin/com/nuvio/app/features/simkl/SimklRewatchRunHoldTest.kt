@@ -53,6 +53,16 @@ class SimklRewatchRunHoldTest {
         assertFalse(accountCaughtUpWithOptimisticRun(listOf(run(season = 1, episode = 9)), optimistic))
     }
 
+    @Test
+    fun `the card seeded at the run position is the run card`() {
+        val runs = listOf(run(season = 1, episode = 4, matchKeys = listOf("imdb:tt1")))
+
+        assertTrue(isRewatchRunCard(runs, "show", seedSeason = 1, seedEpisode = 4))
+        assertTrue(isRewatchRunCard(runs, "imdb:tt1", seedSeason = 1, seedEpisode = 4))
+        assertFalse(isRewatchRunCard(runs, "show", seedSeason = 1, seedEpisode = 5))
+        assertFalse(isRewatchRunCard(runs, "missing", seedSeason = 1, seedEpisode = 4))
+    }
+
     private fun run(
         contentId: String = "show",
         season: Int,

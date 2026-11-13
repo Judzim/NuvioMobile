@@ -74,3 +74,17 @@ internal fun accountCaughtUpWithOptimisticRun(
     return compareRewatchRuns(run, optimistic) >= 0
 }
 
+/**
+ * Whether a Next Up card stands for the rewatch run of its series. The run moves the card's seed
+ * onto its own position, so a card seeded anywhere else is the canonical card.
+ */
+internal fun isRewatchRunCard(
+    runs: List<RewatchRunPosition>,
+    contentId: String,
+    seedSeason: Int?,
+    seedEpisode: Int?,
+): Boolean {
+    val run = runs.firstOrNull { candidate -> candidate.matches(contentId) } ?: return false
+    return run.seasonNumber == seedSeason && run.episodeNumber == seedEpisode
+}
+
