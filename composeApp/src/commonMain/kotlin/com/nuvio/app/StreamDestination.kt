@@ -35,7 +35,6 @@ import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.sanitizePlaybackResponseHeaders
 import com.nuvio.app.features.servers.ServerPlayback
 import com.nuvio.app.features.servers.serverPlaybackMessage
-import com.nuvio.app.features.simkl.SimklRewatchConsentRepository
 import com.nuvio.app.features.streams.StreamBehaviorHints
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamLaunchStore
@@ -96,11 +95,11 @@ internal fun StreamDestination(
     // The rewatch question is raised when a stream is picked, at the same point the P2P notice is,
     // never at the stream screen opening and never after the stream has been prepared and opened.
     // The player paths below still wait for the answer before they start anything.
-    suspend fun awaitRewatchQuestion(videoId: String) {
+    suspend fun awaitRewatchQuestion() {
         prepareTrackingQuestion(
             contentType = launch.type,
-            parentMetaId = launch.parentMetaId ?: videoId,
-            videoId = videoId,
+            parentMetaId = launch.parentMetaId ?: launch.videoId,
+            videoId = launch.videoId,
             seasonNumber = launch.seasonNumber,
             episodeNumber = launch.episodeNumber,
             title = launch.title,
@@ -300,7 +299,7 @@ internal fun StreamDestination(
         }
         // The rewatch question gates the whole P2P flow the same way the P2P notice does: nothing
         // is opened before the answer, and the P2P notice is shown only after it.
-        awaitRewatchQuestion(effectiveVideoId)
+        awaitRewatchQuestion()
         if (!p2pEnabled) {
             pendingP2pStreamOpen = PendingP2pStreamOpen(
                 stream = stream,
@@ -338,9 +337,6 @@ internal fun StreamDestination(
         val maxAgeMs = playerSettings.streamReuseLastLinkCacheHours * 60L * 60L * 1000L
         val cached = StreamLinkCacheRepository.getValid(cacheKey, maxAgeMs)
         if (cached != null) {
-            // The cached source is this flow's automatic selection: gate it like the P2P notice,
-            // before any loading transition, P2P notice, external intent or player.
-            awaitRewatchQuestion(effectiveVideoId)
             if (cached.url.isBlank() && !cached.infoHash.isNullOrBlank()) {
                 val cachedStream = StreamItem(
                     name = cached.streamName,
@@ -439,7 +435,6 @@ internal fun StreamDestination(
     }
 
     val streamsUiState by StreamsRepository.uiState.collectAsStateWithLifecycle()
-    val rewatchQuestion by SimklRewatchConsentRepository.question.collectAsStateWithLifecycle()
     val expectedStreamsRequestToken = StreamsRepository.requestToken(
         type = launch.type,
         videoId = effectiveVideoId,
@@ -447,17 +442,11 @@ internal fun StreamDestination(
         episode = launch.episodeNumber,
         manualSelection = launch.manualSelection,
     )
-    val showLoadingScreen = rewatchQuestion == null && (
-        autoPlayNavigationStarted ||
-            resolvingDebridStream ||
-            resolvingYouTubeStream ||
-            preparingServerStream ||
-            streamsUiState.shouldShowAutoPlayLoading(
-                expectedRequestToken = expectedStreamsRequestToken,
-                settings = playerSettings,
-                manualSelection = launch.manualSelection,
-            )
-        )
+    val showLoadingScreen = autoPlayNavigationStarted || resolvingDebridStream || resolvingYouTubeStream || preparingServerStream || streamsUiState.shouldShowAutoPlayLoading(
+        expectedRequestToken = expectedStreamsRequestToken,
+        settings = playerSettings,
+        manualSelection = launch.manualSelection,
+    )
     val useLandscapeLoading = autoPlayNavigationStarted || streamsUiState.shouldUseLandscapeAutoPlayLoading(
         expectedRequestToken = expectedStreamsRequestToken,
         settings = playerSettings,
@@ -471,19 +460,16 @@ internal fun StreamDestination(
         expectedStreamsRequestToken,
         reuseHandled,
         launch.manualSelection,
-        hasResolvedVideoId,
     ) {
         if (!reuseHandled) return@LaunchedEffect
-        if (!hasResolvedVideoId) return@LaunchedEffect
         if (launch.manualSelection) return@LaunchedEffect
         if (reuseNavigated) return@LaunchedEffect
         if (autoPlayHandled) return@LaunchedEffect
         if (streamsUiState.requestToken != expectedStreamsRequestToken) return@LaunchedEffect
         val selectedStream = streamsUiState.autoPlayStream ?: return@LaunchedEffect
         // Auto-play picked a stream, which is this flow's selection point: ask and wait before any
-        // preparation, P2P notice or player. The resolved video id is final here, so the question
-        // and the player launch use the same media identity.
-        if (!selectedStream.shouldOpenExternally) awaitRewatchQuestion(effectiveVideoId)
+        // preparation, P2P notice or player.
+        if (!selectedStream.shouldOpenExternally) awaitRewatchQuestion()
         val stream = if (selectedStream.needsServerPreparation) {
             StreamsRepository.setOverlayVisible(true, getString(Res.string.player_loading_preparing))
             runCatching { ServerPlayback.prepare(selectedStream) }
@@ -652,7 +638,7 @@ internal fun StreamDestination(
     ) {
         // The question gates the whole selection the way the P2P notice does: no preparation and
         // no player start before the answer. A link that opens in a browser is not a playback.
-        if (!stream.shouldOpenExternally) awaitRewatchQuestion(effectiveVideoId)
+        if (!stream.shouldOpenExternally) awaitRewatchQuestion()
         if (stream.needsServerPreparation) {
             if (preparingServerStream) return
             streamRouteScope.launch {
