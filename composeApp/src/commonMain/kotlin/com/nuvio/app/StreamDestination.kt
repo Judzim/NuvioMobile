@@ -108,10 +108,6 @@ internal fun StreamDestination(
         )
     }
 
-    fun askRewatchQuestion() {
-        streamRouteScope.launch { awaitRewatchQuestion() }
-    }
-
     var autoPlayNavigationStarted by remember(route.launchId) { mutableStateOf(false) }
     var resolvingDebridStream by rememberSaveable(route.launchId) { mutableStateOf(false) }
     var resolvingYouTubeStream by rememberSaveable(route.launchId) { mutableStateOf(false) }
@@ -285,7 +281,7 @@ internal fun StreamDestination(
         }
     }
 
-    fun requestOrOpenP2pStream(
+    suspend fun requestOrOpenP2pStream(
         stream: StreamItem,
         resolvedResumePositionMs: Long?,
         resolvedResumeProgressFraction: Float?,
@@ -301,8 +297,11 @@ internal fun StreamDestination(
             if (isAutoPlay) StreamsRepository.skipAutoPlayStream(stream)
             return
         }
+        // The rewatch question gates the whole P2P flow the same way the P2P notice does: nothing
+        // is opened before the answer, and the P2P notice is shown only after it.
+        awaitRewatchQuestion()
         if (!p2pEnabled) {
-            val pending = PendingP2pStreamOpen(
+            pendingP2pStreamOpen = PendingP2pStreamOpen(
                 stream = stream,
                 resumePositionMs = resolvedResumePositionMs,
                 resumeProgressFraction = resolvedResumeProgressFraction,
@@ -310,13 +309,6 @@ internal fun StreamDestination(
                 forceInternal = forceInternal,
                 isAutoPlay = isAutoPlay,
             )
-            // The rewatch question and the P2P notice belong to the same selection moment. The
-            // question is answered first, so the two dialogs never stack and the rewatch one is
-            // never hidden behind the P2P one.
-            streamRouteScope.launch {
-                awaitRewatchQuestion()
-                pendingP2pStreamOpen = pending
-            }
             return
         }
         openP2pStream(
@@ -475,9 +467,9 @@ internal fun StreamDestination(
         if (autoPlayHandled) return@LaunchedEffect
         if (streamsUiState.requestToken != expectedStreamsRequestToken) return@LaunchedEffect
         val selectedStream = streamsUiState.autoPlayStream ?: return@LaunchedEffect
-        // Auto-play picked a stream, which is this flow's selection point: ask now, then prepare.
-        // The question comes before any P2P notice or link resolution the stream needs.
-        if (!selectedStream.shouldOpenExternally) askRewatchQuestion()
+        // Auto-play picked a stream, which is this flow's selection point: ask and wait before any
+        // preparation, P2P notice or player.
+        if (!selectedStream.shouldOpenExternally) awaitRewatchQuestion()
         val stream = if (selectedStream.needsServerPreparation) {
             StreamsRepository.setOverlayVisible(true, getString(Res.string.player_loading_preparing))
             runCatching { ServerPlayback.prepare(selectedStream) }
@@ -636,7 +628,7 @@ internal fun StreamDestination(
         return
     }
 
-    fun openSelectedStream(
+    suspend fun openSelectedStream(
         stream: StreamItem,
         resolvedResumePositionMs: Long?,
         resolvedResumeProgressFraction: Float?,
@@ -644,9 +636,9 @@ internal fun StreamDestination(
         forceInternal: Boolean,
         saveForReuse: Boolean = true,
     ) {
-        // Same point as the P2P notice: the stream was picked, the player has not started yet.
-        // A link that opens in a browser is not a tracked playback, so it is left alone.
-        if (!stream.shouldOpenExternally) askRewatchQuestion()
+        // The question gates the whole selection the way the P2P notice does: no preparation and
+        // no player start before the answer. A link that opens in a browser is not a playback.
+        if (!stream.shouldOpenExternally) awaitRewatchQuestion()
         if (stream.needsServerPreparation) {
             if (preparingServerStream) return
             streamRouteScope.launch {
@@ -877,23 +869,27 @@ internal fun StreamDestination(
                 manualSelection = launch.manualSelection,
                 startFromBeginning = launch.startFromBeginning,
                 onStreamSelected = { stream, resolvedResumePositionMs, resolvedResumeProgressFraction ->
-                    openSelectedStream(
-                        stream = stream,
-                        resolvedResumePositionMs = resolvedResumePositionMs,
-                        resolvedResumeProgressFraction = resolvedResumeProgressFraction,
-                        forceExternal = false,
-                        forceInternal = false,
-                        saveForReuse = stream != sharedStream?.stream,
-                    )
+                    streamRouteScope.launch {
+                        openSelectedStream(
+                            stream = stream,
+                            resolvedResumePositionMs = resolvedResumePositionMs,
+                            resolvedResumeProgressFraction = resolvedResumeProgressFraction,
+                            forceExternal = false,
+                            forceInternal = false,
+                            saveForReuse = stream != sharedStream?.stream,
+                        )
+                    }
                 },
                 onStreamActionOpen = { stream, openExternally, resolvedResumePositionMs, resolvedResumeProgressFraction ->
-                    openSelectedStream(
-                        stream = stream,
-                        resolvedResumePositionMs = resolvedResumePositionMs,
-                        resolvedResumeProgressFraction = resolvedResumeProgressFraction,
-                        forceExternal = openExternally,
-                        forceInternal = !openExternally,
-                    )
+                    streamRouteScope.launch {
+                        openSelectedStream(
+                            stream = stream,
+                            resolvedResumePositionMs = resolvedResumePositionMs,
+                            resolvedResumeProgressFraction = resolvedResumeProgressFraction,
+                            forceExternal = openExternally,
+                            forceInternal = !openExternally,
+                        )
+                    }
                 },
                 onBack = onBack,
                 modifier = Modifier.fillMaxSize(),
