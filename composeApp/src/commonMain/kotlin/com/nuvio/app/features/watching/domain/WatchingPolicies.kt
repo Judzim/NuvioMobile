@@ -47,6 +47,22 @@ internal fun completionFractionFor(contentEndPercent: Double?): Double? =
         ?.takeIf { fraction -> fraction in 0.0..1.0 }
 
 /**
+ * The completion threshold a local progress row carries when the progress source counts a watch
+ * only from a higher point than the app's own bar.
+ *
+ * It only ever raises the bar: below it the row and the source already agree, and a source that
+ * counts a watch earlier shows it as watched from its own data anyway.
+ */
+internal fun localCompletionThresholdFor(sourceThresholdPercent: Double?): Float? {
+    val fraction = sourceThresholdPercent
+        ?.takeIf { percent -> percent.isFinite() }
+        ?.let { percent -> (percent / 100.0).toFloat() }
+        ?: return null
+    if (fraction <= CompletionThresholdFraction) return null
+    return fraction.coerceAtMost(1f)
+}
+
+/**
  * [completionFraction], when the caller knows it, is where the content really ends. It replaces the
  * usual percentage, so a playback that stopped before the credits is not a finished one, whatever
  * percentage it happens to sit at.

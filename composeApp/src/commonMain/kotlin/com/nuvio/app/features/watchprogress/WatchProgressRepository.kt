@@ -23,6 +23,7 @@ import com.nuvio.app.features.tracking.effectiveWatchProgressSource
 import com.nuvio.app.features.tracking.providerId
 import com.nuvio.app.features.watching.application.WatchingActions
 import com.nuvio.app.features.watching.domain.completionFractionFor
+import com.nuvio.app.features.watching.domain.localCompletionThresholdFor
 import com.nuvio.app.features.watching.sync.ProgressDeltaEvent
 import com.nuvio.app.features.watching.sync.ProgressSyncRecord
 import com.nuvio.app.features.watching.sync.ProgressSyncAdapter
@@ -531,6 +532,25 @@ object WatchProgressRepository {
 
     private fun activeProgressProvider(): TrackingProgressProvider? =
         activeSource.providerId?.let(TrackingProviderRegistry::progressProvider)
+
+    /*
+     * Only the active source has a say: with the app's own progress as the source the local bar stays
+     * the one this device decides by, whatever the connected trackers count. A source that cannot
+     * name its bar leaves the local one in place rather than failing the progress save.
+     */
+    internal fun sourceCompletionThreshold(contentEndPercent: Double?): Float? {
+        val provider = activeProgressProvider() ?: return null
+        val sourcePercent = try {
+            TrackingSettingsRepository.ensureLoaded()
+            provider.completionThresholdPercent(contentEndPercent)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            log.w { "${provider.providerId.storageId} completion threshold unavailable" }
+            null
+        }
+        return localCompletionThresholdFor(sourcePercent)
+    }
 
     private fun isProgressProviderAvailable(providerId: TrackingProviderId): Boolean =
         TrackingProviderRegistry.progressProvider(providerId) != null &&
@@ -1335,8 +1355,14 @@ object WatchProgressRepository {
         val positionMs = snapshot.positionMs.coerceAtLeast(0L)
         val durationMs = snapshot.durationMs.coerceAtLeast(0L)
         // The credits marker says where the content really ends, and the tracker reads the same number
-        // for the same release, so the local state cannot call a playback finished before it.
-        val completionFraction = completionFractionFor(contentEndPercent)
+        // for the same release, so the local state cannot call a playback finished before it. Past
+        // the app's own bar a progress source that counts a watch only from a higher point decides:
+        // below its bar the source keeps a pause, and marking the item watched here would show it
+        // watched next to the position the source offers to resume.
+        val appBarReached = durationMs > 0L &&
+            positionMs.toDouble() / durationMs.toDouble() >= WatchProgressCompletionPercentThreshold / 100.0
+        val completionFraction = (if (appBarReached) sourceCompletionThreshold(contentEndPercent) else null)
+            ?: completionFractionFor(contentEndPercent)
         val isCompleted = isWatchProgressComplete(
             positionMs = positionMs,
             durationMs = durationMs,

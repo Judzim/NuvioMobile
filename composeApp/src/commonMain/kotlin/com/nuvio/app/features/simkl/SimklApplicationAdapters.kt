@@ -7,6 +7,7 @@ import com.nuvio.app.features.tracking.TrackingProviderId
 import com.nuvio.app.features.tracking.TrackingProgressProvider
 import com.nuvio.app.features.tracking.TrackingProgressSnapshot
 import com.nuvio.app.features.tracking.TrackingRefreshIntent
+import com.nuvio.app.features.tracking.TrackingSettingsRepository
 import com.nuvio.app.features.tracking.TrackingWatchedProvider
 import com.nuvio.app.features.watched.WatchedItem
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
@@ -287,6 +288,13 @@ object SimklTrackingProgressProvider : TrackingProgressProvider {
         val resolvedId = snapshot.resolveCanonicalContentId(parentContentId)
         return resolvedId ?: parentContentId
     }
+
+    /** The bar the stop of this playback is sent with, so a pause on the account is a pause here too. */
+    override fun completionThresholdPercent(contentEndPercent: Double?): Double? =
+        simklCompletionThresholdPercent(
+            userThresholdPercent = TrackingSettingsRepository.uiState.value.simklWatchedThresholdPercent,
+            contentEndPercent = contentEndPercent,
+        )
 }
 
 private const val SIMKL_PLAYBACK_PROGRESS_KEY_PREFIX = "simkl-playback:"

@@ -266,6 +266,13 @@ class SimklRewatchPolicyTest {
     }
 
     @Test
+    fun `the local completion uses the bar the stop is sent with`() {
+        assertEquals(96.0, simklCompletionThresholdPercent(96, contentEndPercent = null))
+        assertEquals(92.0, simklCompletionThresholdPercent(80, contentEndPercent = 92.6))
+        assertEquals(100.0, simklCompletionThresholdPercent(100, contentEndPercent = null))
+    }
+
+    @Test
     fun `a history rewatch needs an added episode, not only a status`() {
         assertTrue(simklHistoryRewatchWasRecorded("active", addedCount = 1))
         assertTrue(simklHistoryRewatchWasRecorded("completed", addedCount = 2))
