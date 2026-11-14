@@ -11,6 +11,7 @@ import com.nuvio.app.features.simkl.SimklRewatchConsentRepository
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.rewatch_prompt_confirm
 import nuvio.composeapp.generated.resources.rewatch_prompt_dismiss
+import nuvio.composeapp.generated.resources.rewatch_prompt_subtitle
 import nuvio.composeapp.generated.resources.rewatch_prompt_title
 import org.jetbrains.compose.resources.stringResource
 
@@ -32,6 +33,7 @@ fun RewatchPromptHost() {
     DialogSurface(
         onDismissRequest = SimklRewatchConsentRepository::dismiss,
         title = stringResource(Res.string.rewatch_prompt_title),
+        message = stringResource(Res.string.rewatch_prompt_subtitle),
     ) {
         DialogButtons {
             DialogButton(
