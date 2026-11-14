@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.episodes_cd_rewatched
 import nuvio.composeapp.generated.resources.episodes_cd_watched
@@ -43,7 +44,8 @@ fun NuvioWatchedBadge(
             imageVector = Icons.Default.Check,
             contentDescription = stringResource(Res.string.episodes_cd_watched),
             tint = palette.onSecondary,
-            modifier = Modifier.size(NuvioTokens.Icon.xs),
+            // 14 dp matches the rewatch glyph's visual weight on the 20 dp circle.
+            modifier = Modifier.size(14.dp),
         )
     }
 }
