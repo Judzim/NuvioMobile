@@ -10,9 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,7 +20,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.episodes_cd_rewatched
@@ -50,10 +49,12 @@ fun NuvioWatchedBadge(
 }
 
 /**
- * The R badge beside the watched marker on an episode the running rewatch has covered.
+ * The circular arrow badge beside the watched marker on an episode the running rewatch has
+ * covered.
  *
  * It uses the same circle and accent brush as [NuvioWatchedBadge], so the two read as one status
- * pair. The letter is sized from the badge so every card size keeps the same proportion.
+ * pair. The refresh glyph is a vector, so it stays crisp at every badge size and does not depend on
+ * the selected text font.
  */
 @Composable
 fun NuvioRewatchBadge(
@@ -70,11 +71,11 @@ fun NuvioRewatchBadge(
             .clearAndSetSemantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = "R",
-            color = palette.onSecondary,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-            maxLines = 1,
+        Icon(
+            imageVector = Icons.Default.Refresh,
+            contentDescription = null,
+            tint = palette.onSecondary,
+            modifier = Modifier.size(NuvioTokens.Icon.sm),
         )
     }
 }
